@@ -1,0 +1,17 @@
+==============================================
+Verify Header Split Circuit - Build & Prove
+==============================================
+Script directory: /Users/josefigueredo/Desktop/web3/forkeado/zkBridge-lightClient/circuits/verify_header
+Build directory: /Users/josefigueredo/Desktop/web3/forkeado/zkBridge-lightClient/circuits/verify_header/build_split_mini
+Node: node
+Validators: 8
+
+
+========================================
+PHASE: Compiling all circuits (verify_header_mini)
+========================================
+---- Compiling verify_header_mini_part1.circom...
+This may take a while for large circuits...
+[0m[1m[38;5;9merror[P1000][0m[1m: Include not found: ../node_modules/circomlib/circuits/poseidon.circom[0m
+
+[31mprevious errors were found[0m
