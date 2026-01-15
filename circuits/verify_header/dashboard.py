@@ -370,12 +370,15 @@ def draw_compilation_progress(status: Dict[str, str]) -> str:
         else:
             part_symbols.append(f"{Colors.GRAY}\u25cb{Colors.NC}")
 
-    lines.append(f"{Colors.WHITE}\u2502{Colors.NC}  \u250c{'──────\u252c' * 7}──────\u2510")
+    # Extract Unicode strings to avoid backslash issues in f-strings (Python 3.8 compatibility)
+    top_segment = '──────\u252c'
+    bottom_segment = '──────\u2534'
+    lines.append(f"{Colors.WHITE}\u2502{Colors.NC}  \u250c{top_segment * 7}──────\u2510")
     parts_row = f"{Colors.WHITE}\u2502{Colors.NC}  \u2502"
     for i, p in enumerate(parts):
         parts_row += f" {part_symbols[i]} {p:<2} \u2502"
     lines.append(parts_row)
-    lines.append(f"{Colors.WHITE}\u2502{Colors.NC}  \u2514{'──────\u2534' * 7}──────\u2518")
+    lines.append(f"{Colors.WHITE}\u2502{Colors.NC}  \u2514{bottom_segment * 7}──────\u2518")
 
     lines.append(f"{Colors.WHITE}\u2502{Colors.NC}")
 
@@ -633,7 +636,8 @@ def run_with_monitoring(script: str, mode: str):
 def show_history():
     """Show compilation history."""
     print(f"{Colors.BLUE}{Colors.BOLD}Compilation History{Colors.NC}")
-    print(f"{Colors.GRAY}{'\u2500' * 45}{Colors.NC}")
+    separator = '\u2500' * 45
+    print(f"{Colors.GRAY}{separator}{Colors.NC}")
 
     if HISTORY_FILE.exists():
         with open(HISTORY_FILE, 'r') as f:
