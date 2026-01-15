@@ -341,9 +341,7 @@ draw_compilation_progress() {
     done
 
     echo -e "${WHITE}│${NC}  ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐"
-    printf "${WHITE}│${NC}  │ %s 1A │ %s 1B │ %s 1C │ %s 1D │ %s 1E │ %s 2  │ %s 3A │ %s 3B │\n" \
-        "${part_status[0]}" "${part_status[1]}" "${part_status[2]}" "${part_status[3]}" \
-        "${part_status[4]}" "${part_status[5]}" "${part_status[6]}" "${part_status[7]}"
+    echo -e "${WHITE}│${NC}  │ ${part_status[0]} 1A │ ${part_status[1]} 1B │ ${part_status[2]} 1C │ ${part_status[3]} 1D │ ${part_status[4]} 1E │ ${part_status[5]} 2  │ ${part_status[6]} 3A │ ${part_status[7]} 3B │"
     echo -e "${WHITE}│${NC}  └──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘"
 
     echo -e "${WHITE}│${NC}"
