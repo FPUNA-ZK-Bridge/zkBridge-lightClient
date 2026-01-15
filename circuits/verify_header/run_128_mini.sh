@@ -45,6 +45,26 @@ set -e
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source dashboard library for monitoring (if available)
+if [ -f "$SCRIPT_DIR/dashboard_lib.sh" ]; then
+    source "$SCRIPT_DIR/dashboard_lib.sh"
+    DASHBOARD_AVAILABLE=1
+else
+    DASHBOARD_AVAILABLE=0
+    # Stub functions if dashboard not available
+    dashboard_init() { :; }
+    dashboard_stage() { :; }
+    dashboard_part() { :; }
+    dashboard_step() { :; }
+    dashboard_constraints() { :; }
+    dashboard_complete_part() { :; }
+    dashboard_error() { :; }
+    dashboard_warning() { :; }
+    dashboard_finish() { :; }
+    dashboard_log() { :; }
+    dashboard_check_memory() { :; }
+fi
 BUILD_DIR="$SCRIPT_DIR/build_128_mini"
 CIRCUIT_PREFIX="verify_header_128_mini"
 NUM_VALIDATORS=8
@@ -230,15 +250,19 @@ compile_part() {
 
     if [ ! -f "$circom_file" ]; then
         log_error "Circuit file not found: $circom_file"
+        dashboard_error "Circuit file not found: $circom_file"
         exit 1
     fi
 
     if [ -f "$build_dir/${circuit_name}.r1cs" ]; then
         log_info "Part $part already compiled, skipping..."
+        dashboard_complete_part
         return 0
     fi
 
     log_step "Compiling Part $part ($circuit_name)..."
+    dashboard_part "$part"
+    dashboard_step "Running circom compiler"
     local start=$(date +%s)
 
     circom "$circom_file" \
@@ -250,6 +274,8 @@ compile_part() {
         2>&1 | tee "$LOG_DIR/compile_mini_${part}.log"
 
     log_info "Compiled in $(get_elapsed $start)"
+    dashboard_complete_part
+    dashboard_check_memory
 
     # Show constraint count
     if command -v snarkjs &> /dev/null; then
@@ -261,6 +287,9 @@ compile_part() {
 compile_all() {
     log_header "COMPILING CIRCUITS (MINI - 8 validators - 8 parts)"
 
+    dashboard_init "128-mini" 8
+    dashboard_stage "compiling"
+
     check_command circom
 
     for part in "${PARTS[@]}"; do
@@ -269,6 +298,7 @@ compile_all() {
 
     echo ""
     log_info "All circuits compiled successfully!"
+    dashboard_log "All circuits compiled successfully"
 }
 
 # =============================================================================
@@ -725,6 +755,8 @@ generate_witness_part3b() {
 generate_all_witnesses() {
     log_header "GENERATING WITNESSES (MINI 8 parts)"
 
+    dashboard_stage "witness_generation"
+
     prepare_input
     generate_witness_part1a
     generate_witness_part1b
@@ -737,6 +769,7 @@ generate_all_witnesses() {
 
     echo ""
     log_info "All witnesses generated successfully!"
+    dashboard_log "All witnesses generated successfully"
 }
 
 # =============================================================================
@@ -785,16 +818,20 @@ generate_zkey_part() {
 generate_all_zkeys() {
     log_header "GENERATING TRUSTED SETUP (ZKEYS)"
 
+    dashboard_stage "trusted_setup"
+
     # Find ptau file
     PTAU_FILE=$(find_ptau)
     if [ -z "$PTAU_FILE" ]; then
         log_error "Powers of Tau file not found!"
+        dashboard_error "Powers of Tau file not found"
         log_info "Please download pot25_final.ptau from:"
         log_info "  https://github.com/iden3/snarkjs#7-prepare-phase-2"
         log_info "Or set PTAU_FILE environment variable"
         exit 1
     fi
     log_info "Using ptau: $PTAU_FILE"
+    dashboard_log "Using ptau: $PTAU_FILE"
 
     for part in "${PARTS[@]}"; do
         generate_zkey_part "$part"
@@ -802,6 +839,7 @@ generate_all_zkeys() {
 
     echo ""
     log_info "All zkeys generated successfully!"
+    dashboard_log "All zkeys generated successfully"
 }
 
 # =============================================================================
@@ -852,11 +890,15 @@ verify_proof_part() {
 generate_all_proofs() {
     log_header "GENERATING PROOFS"
 
+    dashboard_stage "proving"
+
     for part in "${PARTS[@]}"; do
         generate_proof_part "$part"
     done
 
     log_header "VERIFYING PROOFS"
+
+    dashboard_stage "verifying"
 
     for part in "${PARTS[@]}"; do
         verify_proof_part "$part"
@@ -864,6 +906,7 @@ generate_all_proofs() {
 
     echo ""
     log_info "All proofs generated and verified!"
+    dashboard_log "All proofs generated and verified"
 }
 
 # =============================================================================
@@ -1028,6 +1071,7 @@ main() {
             generate_all_proofs
             export_verifiers
             print_summary
+            dashboard_finish
             ;;
     esac
 

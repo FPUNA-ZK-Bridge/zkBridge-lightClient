@@ -40,6 +40,27 @@ set -e
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source dashboard library for monitoring (if available)
+if [ -f "$SCRIPT_DIR/dashboard_lib.sh" ]; then
+    source "$SCRIPT_DIR/dashboard_lib.sh"
+    DASHBOARD_AVAILABLE=1
+else
+    DASHBOARD_AVAILABLE=0
+    # Stub functions if dashboard not available
+    dashboard_init() { :; }
+    dashboard_stage() { :; }
+    dashboard_part() { :; }
+    dashboard_step() { :; }
+    dashboard_constraints() { :; }
+    dashboard_complete_part() { :; }
+    dashboard_error() { :; }
+    dashboard_warning() { :; }
+    dashboard_finish() { :; }
+    dashboard_log() { :; }
+    dashboard_check_memory() { :; }
+fi
+
 BUILD_DIR="$SCRIPT_DIR/build_128"
 CIRCUIT_PREFIX="verify_header_128"
 NUM_VALIDATORS=128
@@ -225,15 +246,19 @@ compile_part() {
 
     if [ ! -f "$circom_file" ]; then
         log_error "Circuit file not found: $circom_file"
+        dashboard_error "Circuit file not found: $circom_file"
         exit 1
     fi
 
     if [ -f "$build_dir/${circuit_name}.r1cs" ]; then
         log_info "Part $part already compiled, skipping..."
+        dashboard_complete_part
         return 0
     fi
 
     log_step "Compiling Part $part ($circuit_name)..."
+    dashboard_part "$part"
+    dashboard_step "Running circom compiler"
     local start=$(date +%s)
 
     circom "$circom_file" \
@@ -245,6 +270,8 @@ compile_part() {
         2>&1 | tee "$LOG_DIR/compile_${part}.log"
 
     log_info "Compiled in $(get_elapsed $start)"
+    dashboard_complete_part
+    dashboard_check_memory
 
     # Show constraint count
     if command -v snarkjs &> /dev/null; then
@@ -256,6 +283,9 @@ compile_part() {
 compile_all() {
     log_header "COMPILING CIRCUITS (128 validators - 8 parts)"
 
+    dashboard_init "128-validator" 8
+    dashboard_stage "compiling"
+
     check_command circom
 
     for part in "${PARTS[@]}"; do
@@ -264,6 +294,7 @@ compile_all() {
 
     echo ""
     log_info "All circuits compiled successfully!"
+    dashboard_log "All circuits compiled successfully"
 }
 
 # =============================================================================
@@ -1023,6 +1054,7 @@ main() {
             generate_all_proofs
             export_verifiers
             print_summary
+            dashboard_finish
             ;;
     esac
 
