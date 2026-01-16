@@ -17,6 +17,7 @@ Usage:
 import os
 import sys
 import time
+import shutil
 import signal
 import argparse
 import subprocess
@@ -225,6 +226,19 @@ def init_status(mode: str, total_parts: int = 8) -> None:
 
 
 # =============================================================================
+# Terminal Size
+# =============================================================================
+
+def get_terminal_size() -> Tuple[int, int]:
+    """Get terminal size (columns, rows)."""
+    try:
+        size = shutil.get_terminal_size()
+        return size.columns, size.lines
+    except Exception:
+        return 80, 24  # Default fallback
+
+
+# =============================================================================
 # UI Drawing Functions
 # =============================================================================
 
@@ -273,21 +287,28 @@ def get_color_for_percent(percent: float, warn: float = 70, crit: float = 90) ->
 # Dashboard Sections
 # =============================================================================
 
-def draw_header(status: Dict[str, str]) -> str:
+def draw_header(status: Dict[str, str], width: int = 70) -> str:
     """Draw the dashboard header."""
     mode = status.get('MODE', 'N/A')
     stage = status.get('STAGE', 'idle')
 
+    inner_width = width - 2  # Account for border characters
+    title = "\u26a1 CIRCUIT COMPILATION DASHBOARD"
+    title_padding = inner_width - len(title) - 2  # -2 for leading spaces
+
+    info_line = f"Mode: {mode}  Stage: {stage}"
+    info_padding = inner_width - len(info_line) - 2
+
     lines = [
-        f"{Colors.BLUE}\u2554{'═' * 68}\u2557{Colors.NC}",
-        f"{Colors.BLUE}\u2551{Colors.NC}  {Colors.BOLD}{Colors.WHITE}\u26a1 CIRCUIT COMPILATION DASHBOARD{Colors.NC}                                  {Colors.BLUE}\u2551{Colors.NC}",
-        f"{Colors.BLUE}\u2551{Colors.NC}  {Colors.GRAY}Mode: {Colors.CYAN}{mode:<15}{Colors.NC} {Colors.GRAY}Stage: {Colors.YELLOW}{stage:<20}{Colors.NC}    {Colors.BLUE}\u2551{Colors.NC}",
-        f"{Colors.BLUE}\u255a{'═' * 68}\u255d{Colors.NC}",
+        f"{Colors.BLUE}\u2554{'═' * inner_width}\u2557{Colors.NC}",
+        f"{Colors.BLUE}\u2551{Colors.NC}  {Colors.BOLD}{Colors.WHITE}{title}{Colors.NC}{' ' * title_padding}{Colors.BLUE}\u2551{Colors.NC}",
+        f"{Colors.BLUE}\u2551{Colors.NC}  {Colors.GRAY}Mode: {Colors.CYAN}{mode}{Colors.NC}  {Colors.GRAY}Stage: {Colors.YELLOW}{stage}{Colors.NC}{' ' * (inner_width - len(info_line) - 2)}{Colors.BLUE}\u2551{Colors.NC}",
+        f"{Colors.BLUE}\u255a{'═' * inner_width}\u255d{Colors.NC}",
     ]
     return '\n'.join(lines)
 
 
-def draw_system_metrics(status: Dict[str, str]) -> str:
+def draw_system_metrics(status: Dict[str, str], width: int = 70) -> str:
     """Draw system metrics section."""
     cpu = get_cpu_usage()
     mem_used, mem_total = get_memory_info()
@@ -300,28 +321,33 @@ def draw_system_metrics(status: Dict[str, str]) -> str:
         update_status('PEAK_MEMORY', f"{mem_used:.1f}")
         peak_mem = mem_used
 
+    inner_width = width - 2
+    title = " SYSTEM METRICS "
+    title_dashes = inner_width - len(title) - 1
+    bar_width = max(15, min(40, width - 35))  # Adaptive bar width
+
     lines = [
         "",
-        f"{Colors.WHITE}{Colors.BOLD}\u250c\u2500 SYSTEM METRICS {'─' * 52}\u2510{Colors.NC}",
+        f"{Colors.WHITE}{Colors.BOLD}\u250c\u2500{title}{'─' * title_dashes}\u2510{Colors.NC}",
         f"{Colors.WHITE}\u2502{Colors.NC}",
     ]
 
     # CPU
     cpu_color = get_color_for_percent(cpu, 50, 80)
-    cpu_bar = draw_metric_bar(cpu, 100, 25, cpu_color)
+    cpu_bar = draw_metric_bar(cpu, 100, bar_width, cpu_color)
     lines.append(f"{Colors.WHITE}\u2502{Colors.NC}  {Colors.CYAN}CPU:{Colors.NC}    {cpu_bar} {cpu_color}{cpu:5.1f}%{Colors.NC}")
 
     # Memory
     mem_percent = (mem_used / mem_total * 100) if mem_total > 0 else 0
     mem_color = get_color_for_percent(mem_percent)
-    mem_bar = draw_metric_bar(mem_percent, 100, 25, mem_color)
+    mem_bar = draw_metric_bar(mem_percent, 100, bar_width, mem_color)
     lines.append(f"{Colors.WHITE}\u2502{Colors.NC}  {Colors.CYAN}Memory:{Colors.NC} {mem_bar} {mem_color}{mem_used:5.1f}{Colors.NC}/{Colors.WHITE}{mem_total:.0f} GB{Colors.NC}")
 
     # Swap (only if used)
     if swap_total > 0:
         swap_percent = (swap_used / swap_total * 100) if swap_total > 0 else 0
         swap_color = get_color_for_percent(swap_percent, 50, 80)
-        swap_bar = draw_metric_bar(swap_percent, 100, 25, swap_color)
+        swap_bar = draw_metric_bar(swap_percent, 100, bar_width, swap_color)
         lines.append(f"{Colors.WHITE}\u2502{Colors.NC}  {Colors.CYAN}Swap:{Colors.NC}   {swap_bar} {swap_color}{swap_used:5.0f}{Colors.NC}/{Colors.WHITE}{swap_total:.0f} MB{Colors.NC}")
 
     # Load and peak memory
@@ -329,13 +355,13 @@ def draw_system_metrics(status: Dict[str, str]) -> str:
 
     lines.extend([
         f"{Colors.WHITE}\u2502{Colors.NC}",
-        f"{Colors.WHITE}\u2514{'─' * 69}\u2518{Colors.NC}",
+        f"{Colors.WHITE}\u2514{'─' * inner_width}\u2518{Colors.NC}",
     ])
 
     return '\n'.join(lines)
 
 
-def draw_compilation_progress(status: Dict[str, str]) -> str:
+def draw_compilation_progress(status: Dict[str, str], width: int = 70) -> str:
     """Draw compilation progress section."""
     stage = status.get('STAGE', 'idle')
     part = status.get('PART', '')
@@ -345,14 +371,19 @@ def draw_compilation_progress(status: Dict[str, str]) -> str:
     start_time = int(status.get('START_TIME', '0'))
     constraints = status.get('CURRENT_CONSTRAINTS', '0')
 
+    inner_width = width - 2
+    title = " COMPILATION PROGRESS "
+    title_dashes = inner_width - len(title) - 1
+    progress_bar_width = max(30, min(60, width - 20))
+
     lines = [
         "",
-        f"{Colors.WHITE}{Colors.BOLD}\u250c\u2500 COMPILATION PROGRESS {'─' * 46}\u2510{Colors.NC}",
+        f"{Colors.WHITE}{Colors.BOLD}\u250c\u2500{title}{'─' * title_dashes}\u2510{Colors.NC}",
         f"{Colors.WHITE}\u2502{Colors.NC}",
     ]
 
     # Overall progress bar
-    progress_bar = draw_progress_bar(completed_parts, total_parts, 50)
+    progress_bar = draw_progress_bar(completed_parts, total_parts, progress_bar_width)
     lines.append(f"{Colors.WHITE}\u2502{Colors.NC}  Overall {progress_bar}")
     lines.append(f"{Colors.WHITE}\u2502{Colors.NC}")
 
@@ -362,10 +393,13 @@ def draw_compilation_progress(status: Dict[str, str]) -> str:
     parts = ["1A", "1B", "1C", "1D", "1E", "2", "3A", "3B"]
     part_symbols = []
 
+    # Normalize part name for comparison (e.g., "part1c" -> "1C")
+    current_part_normalized = part.lower().replace('part', '').upper() if part else ''
+
     for i, p in enumerate(parts):
-        if i + 1 < completed_parts:
+        if i < completed_parts:
             part_symbols.append(f"{Colors.GREEN}\u2713{Colors.NC}")
-        elif i + 1 == completed_parts and part:
+        elif p == current_part_normalized or (part and p.lower() in part.lower()):
             part_symbols.append(f"{Colors.YELLOW}\u25cf{Colors.NC}")
         else:
             part_symbols.append(f"{Colors.GRAY}\u25cb{Colors.NC}")
@@ -387,7 +421,11 @@ def draw_compilation_progress(status: Dict[str, str]) -> str:
         lines.append(f"{Colors.WHITE}\u2502{Colors.NC}  {Colors.BOLD}Current Activity:{Colors.NC}")
         lines.append(f"{Colors.WHITE}\u2502{Colors.NC}    Stage: {Colors.CYAN}{stage}{Colors.NC}")
         if part:
-            lines.append(f"{Colors.WHITE}\u2502{Colors.NC}    Part:  {Colors.YELLOW}{part}{Colors.NC}")
+            # Format part name nicely (e.g., "part1c" -> "Part 1C")
+            part_display = part.replace('part', 'Part ').replace('Part ', 'Part ').upper()
+            if 'PART' in part_display:
+                part_display = 'Part ' + part_display.replace('PART ', '').replace('PART', '')
+            lines.append(f"{Colors.WHITE}\u2502{Colors.NC}    Part:  {Colors.YELLOW}{part_display}{Colors.NC}")
         if step:
             lines.append(f"{Colors.WHITE}\u2502{Colors.NC}    Step:  {Colors.WHITE}{step}{Colors.NC}")
         if constraints and constraints != '0':
@@ -410,19 +448,24 @@ def draw_compilation_progress(status: Dict[str, str]) -> str:
 
     lines.extend([
         f"{Colors.WHITE}\u2502{Colors.NC}",
-        f"{Colors.WHITE}\u2514{'─' * 69}\u2518{Colors.NC}",
+        f"{Colors.WHITE}\u2514{'─' * inner_width}\u2518{Colors.NC}",
     ])
 
     return '\n'.join(lines)
 
 
-def draw_log_tail(status: Dict[str, str], num_lines: int = 5) -> str:
+def draw_log_tail(status: Dict[str, str], width: int = 70, num_lines: int = 10) -> str:
     """Draw recent log output section."""
     log_file = status.get('LOG_FILE', '')
 
+    inner_width = width - 2
+    title = " RECENT LOG OUTPUT "
+    title_dashes = inner_width - len(title) - 1
+    max_line_len = inner_width - 4  # Account for border and padding
+
     lines = [
         "",
-        f"{Colors.WHITE}{Colors.BOLD}\u250c\u2500 RECENT LOG OUTPUT {'─' * 49}\u2510{Colors.NC}",
+        f"{Colors.WHITE}{Colors.BOLD}\u250c\u2500{title}{'─' * title_dashes}\u2510{Colors.NC}",
     ]
 
     if log_file and Path(log_file).exists():
@@ -431,15 +474,22 @@ def draw_log_tail(status: Dict[str, str], num_lines: int = 5) -> str:
                 log_lines = f.readlines()[-num_lines:]
             for line in log_lines:
                 line = line.strip()
-                if len(line) > 68:
-                    line = line[:65] + "..."
+                if len(line) > max_line_len:
+                    line = line[:max_line_len - 3] + "..."
                 lines.append(f"{Colors.WHITE}\u2502{Colors.NC}  {Colors.GRAY}{line}{Colors.NC}")
+            # Pad with empty lines if needed
+            for _ in range(num_lines - len(log_lines)):
+                lines.append(f"{Colors.WHITE}\u2502{Colors.NC}")
         except Exception:
             lines.append(f"{Colors.WHITE}\u2502{Colors.NC}  {Colors.GRAY}Error reading log file{Colors.NC}")
+            for _ in range(num_lines - 1):
+                lines.append(f"{Colors.WHITE}\u2502{Colors.NC}")
     else:
         lines.append(f"{Colors.WHITE}\u2502{Colors.NC}  {Colors.GRAY}No log file available{Colors.NC}")
+        for _ in range(num_lines - 1):
+            lines.append(f"{Colors.WHITE}\u2502{Colors.NC}")
 
-    lines.append(f"{Colors.WHITE}\u2514{'─' * 69}\u2518{Colors.NC}")
+    lines.append(f"{Colors.WHITE}\u2514{'─' * inner_width}\u2518{Colors.NC}")
 
     return '\n'.join(lines)
 
@@ -497,13 +547,21 @@ class Dashboard:
     def draw(self) -> str:
         """Draw the complete dashboard."""
         status = read_status()
+        term_cols, term_rows = get_terminal_size()
+
+        # Calculate adaptive width (min 60, max terminal width - 2)
+        width = max(60, min(term_cols - 2, 120))
+
+        # Calculate log lines based on terminal height
+        # Header ~4, Metrics ~8, Progress ~18, Help ~2 = ~32 fixed lines
+        log_lines = max(5, term_rows - 35)
 
         output = []
         output.append(Terminal.HOME + Terminal.CLEAR_SCREEN)
-        output.append(draw_header(status))
-        output.append(draw_system_metrics(status))
-        output.append(draw_compilation_progress(status))
-        output.append(draw_log_tail(status))
+        output.append(draw_header(status, width))
+        output.append(draw_system_metrics(status, width))
+        output.append(draw_compilation_progress(status, width))
+        output.append(draw_log_tail(status, width, log_lines))
         output.append(draw_help())
 
         return '\n'.join(output)
@@ -582,12 +640,12 @@ def run_with_monitoring(script: str, mode: str):
                 log.flush()
 
                 # Parse output to update status
-                if 'Compiling Part' in line or 'part' in line.lower():
+                # Look for part names like "part1a", "part1c", "Part 1C", etc.
+                part_match = re.search(r'[Pp]art\s*(\d+[a-eA-E]?)', line)
+                if part_match:
                     update_status('STAGE', 'compiling')
-                    for word in line.split():
-                        if word.startswith('part') or word.startswith('Part'):
-                            update_status('PART', word)
-                            break
+                    part_name = 'part' + part_match.group(1).lower()
+                    update_status('PART', part_name)
 
                 if 'constraints' in line.lower():
                     match = re.search(r'(\d+)\s*constraints', line)
