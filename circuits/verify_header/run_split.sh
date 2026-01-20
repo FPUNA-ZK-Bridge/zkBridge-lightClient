@@ -47,10 +47,20 @@ fi
 
 # Powers of Tau file - adjust path as needed
 PHASE1="$SCRIPT_DIR/../../powers_of_tau/powersOfTau28_hez_final_27.ptau"
-PHASE1_ALT="$SCRIPT_DIR/../utils/circom-pairing/circuits/pot25_final.ptau"
+PHASE1_ALT="/home_data/mvillagra/tusima-jose/powers_of_tau/powersOfTau28_hez_final_27.ptau"
 
 # Node path (use system node by default, or patched node if available)
-if [ -f "$SCRIPT_DIR/../../node/out/Release/node" ]; then
+PATCHED_NODE_PATH="/home_data/mvillagra/tusima-jose/node/out/Release/node"
+
+is_runnable_node() {
+    local p="$1"
+    [ -f "$p" ] && [ -x "$p" ] && "$p" --version >/dev/null 2>&1
+}
+
+if is_runnable_node "$PATCHED_NODE_PATH"; then
+    NODE_PATH="$PATCHED_NODE_PATH"
+    NODE_OPTS="--trace-gc --trace-gc-ignore-scavenger --max-old-space-size=2048000 --initial-old-space-size=2048000 --no-global-gc-scheduling --no-incremental-marking --max-semi-space-size=1024 --initial-heap-size=2048000 --expose-gc"
+elif is_runnable_node "$SCRIPT_DIR/../../node/out/Release/node"; then
     NODE_PATH="$SCRIPT_DIR/../../node/out/Release/node"
     NODE_OPTS="--trace-gc --trace-gc-ignore-scavenger --max-old-space-size=2048000 --initial-old-space-size=2048000 --no-global-gc-scheduling --no-incremental-marking --max-semi-space-size=1024 --initial-heap-size=2048000 --expose-gc"
 else
@@ -154,40 +164,43 @@ compile_all() {
 # =============================================================================
 
 prepare_mini_input() {
-    log_substep "Preparing mini input (8 validators from full input)..."
+    log_substep "Preparing mini input (8 validators with valid BLS signature)..."
     
-    local full_input="$INPUT_DIR/${SLOT}_input.json"
-    local mini_input="$INPUT_DIR/${SLOT}_input_mini.json"
+    # Use pre-generated valid input file
+    local valid_input="$INPUT_DIR/test_8_validators.json"
     
-    if [ ! -f "$full_input" ]; then
-        echo "ERROR: Full input file not found: $full_input"
-        exit 1
-    fi
-    
-    if [ -f "$mini_input" ]; then
-        echo "Mini input already exists: $mini_input"
+    if [ -f "$valid_input" ]; then
+        echo "Using pre-generated valid input: $valid_input"
         return 0
     fi
     
-    $NODE_PATH -e "
-    const fs = require('fs');
-    const fullInput = JSON.parse(fs.readFileSync('$full_input', 'utf8'));
+    # Fallback: try to generate if Python is available
+    local gen_script="$SCRIPT_DIR/generate_mini_input.py"
+    if [ -f "$gen_script" ]; then
+        echo "Pre-generated input not found. Attempting to generate..."
+        
+        if ! python3 -c "import py_ecc" 2>/dev/null; then
+            echo "Installing py_ecc..."
+            pip3 install py_ecc --quiet 2>/dev/null || pip3 install --user py_ecc --quiet
+        fi
+        
+        python3 "$gen_script" --output "$valid_input"
+        
+        if [ -f "$valid_input" ]; then
+            echo "Generated valid mini input with 8 validators"
+            return 0
+        fi
+    fi
     
-    const miniInput = {
-        signing_root: fullInput.signing_root,
-        pubkeys: fullInput.pubkeys.slice(0, 8),
-        pubkeybits: fullInput.pubkeybits.slice(0, 8),
-        signature: fullInput.signature
-    };
-    
-    fs.writeFileSync('$mini_input', JSON.stringify(miniInput, null, 2));
-    console.log('Created mini input with 8 validators');
-    "
+    echo "ERROR: Mini input file not found: $valid_input"
+    echo "Please generate it first by running:"
+    echo "  python3 generate_mini_input.py --output input/test_8_validators.json"
+    exit 1
 }
 
 get_input_file() {
     if [ "$MINI_MODE" = true ]; then
-        echo "$INPUT_DIR/${SLOT}_input_mini.json"
+        echo "$INPUT_DIR/test_8_validators.json"
     else
         echo "$INPUT_DIR/${SLOT}_input.json"
     fi

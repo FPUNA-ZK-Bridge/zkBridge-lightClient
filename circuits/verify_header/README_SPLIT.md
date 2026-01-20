@@ -28,6 +28,22 @@ Dividimos el circuito en 3 partes que se ejecutan secuencialmente:
 - `verify_header_mini_part2.circom` - ~8M constraints, ~20-25GB RAM
 - `verify_header_mini_part3.circom` - ~5M constraints, ~12-15GB RAM
 
+### Generación de Input para Mini Mode
+
+El modo mini requiere firmas BLS válidas para 8 validadores. El script `generate_mini_input.py` 
+genera automáticamente:
+- 8 pares de claves BLS12-381
+- Un signing_root aleatorio
+- Firmas individuales agregadas
+
+```bash
+# Generar input válido manualmente:
+pip install py_ecc
+python3 generate_mini_input.py --output input/test_mini.json
+
+# O simplemente ejecutar run_split.sh --mini que lo genera automáticamente
+```
+
 ## Uso
 
 ### Versión Mini (para testing con 16GB RAM)
