@@ -11,7 +11,8 @@ set -e
 
 # Download the powers of tau file from here: https://github.com/iden3/snarkjs#7-prepare-phase-2
 # Move to directory specified below
-PHASE1=../../../powers_of_tau/powersOfTau28_hez_final_27.ptau
+PHASE1="/home_data/mvillagra/tusima-jose/powers_of_tau/powersOfTau28_hez_final_27.ptau"
+
 
 BASE_CIRCUIT_DIR=./
 BUILD_DIR=$BASE_CIRCUIT_DIR/build
