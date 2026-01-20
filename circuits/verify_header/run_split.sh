@@ -216,6 +216,7 @@ generate_witness_part1() {
     local input_file=$(get_input_file)
     
     log_substep "Generating witness for Part1..."
+    echo "  Input file: $input_file"
     
     if [ ! -f "$input_file" ]; then
         echo "ERROR: Input file not found: $input_file"
@@ -223,21 +224,31 @@ generate_witness_part1() {
     fi
     
     local start=$(date +%s)
+    local step_start=$(date +%s)
     
     # Copy input file
     cp "$input_file" "$build_dir/input.json"
     
+    echo "  [Part1] Running witness generation (WASM)..."
     # Generate witness using WASM
     $NODE_PATH "$build_dir/${circuit_name}_js/generate_witness.js" \
         "$build_dir/${circuit_name}_js/${circuit_name}.wasm" \
         "$build_dir/input.json" \
         "$build_dir/witness.wtns"
     
+    local witness_end=$(date +%s)
+    echo "  [Part1] Witness WASM completed in $((witness_end - step_start))s"
+    
+    echo "  [Part1] Exporting witness to JSON..."
+    step_start=$(date +%s)
     # Export to JSON to extract public signals
     snarkjs wtns export json "$build_dir/witness.wtns" "$build_dir/witness.json"
     
     local end=$(date +%s)
-    echo "Part1 witness generated in $((end - start))s"
+    echo "  [Part1] JSON export completed in $((end - step_start))s"
+    echo ""
+    echo ">>> Part1 TOTAL: $((end - start))s <<<"
+    PART1_TIME=$((end - start))
 }
 
 generate_witness_part2() {
@@ -246,9 +257,11 @@ generate_witness_part2() {
     local circuit_name="${CIRCUIT_PREFIX}_part2"
     local input_file=$(get_input_file)
     
-    log_substep "Extracting outputs from Part1 and generating witness for Part2..."
+    log_substep "Generating witness for Part2..."
     local start=$(date +%s)
+    local step_start=$(date +%s)
     
+    echo "  [Part2] Extracting Hm_G2 and aggregated_pubkey from Part1..."
     # Extract Hm_G2 and aggregated_pubkey from Part1 witness and create Part2 input
     $NODE_PATH -e "
     const fs = require('fs');
@@ -296,20 +309,33 @@ generate_witness_part2() {
     };
     
     fs.writeFileSync('$build_dir_2/input.json', JSON.stringify(inputPart2, null, 2));
-    console.log('Created Part2 input with Hm_G2 and aggregated_pubkey from Part1');
+    console.log('  [Part2] Input created from Part1 outputs');
     "
     
+    local extract_end=$(date +%s)
+    echo "  [Part2] Extraction completed in $((extract_end - step_start))s"
+    
+    echo "  [Part2] Running witness generation (WASM)..."
+    step_start=$(date +%s)
     # Generate witness using WASM
     $NODE_PATH "$build_dir_2/${circuit_name}_js/generate_witness.js" \
         "$build_dir_2/${circuit_name}_js/${circuit_name}.wasm" \
         "$build_dir_2/input.json" \
         "$build_dir_2/witness.wtns"
     
+    local witness_end=$(date +%s)
+    echo "  [Part2] Witness WASM completed in $((witness_end - step_start))s"
+    
+    echo "  [Part2] Exporting witness to JSON..."
+    step_start=$(date +%s)
     # Export to JSON
     snarkjs wtns export json "$build_dir_2/witness.wtns" "$build_dir_2/witness.json"
     
     local end=$(date +%s)
-    echo "Part2 witness generated in $((end - start))s"
+    echo "  [Part2] JSON export completed in $((end - step_start))s"
+    echo ""
+    echo ">>> Part2 TOTAL: $((end - start))s <<<"
+    PART2_TIME=$((end - start))
 }
 
 generate_witness_part3() {
@@ -317,9 +343,11 @@ generate_witness_part3() {
     local build_dir_3="$BUILD_BASE/part3"
     local circuit_name="${CIRCUIT_PREFIX}_part3"
     
-    log_substep "Extracting miller_out from Part2 and generating witness for Part3..."
+    log_substep "Generating witness for Part3 (FinalExponentiate)..."
     local start=$(date +%s)
+    local step_start=$(date +%s)
     
+    echo "  [Part3] Extracting miller_out from Part2..."
     # Extract miller_out from Part2 witness
     $NODE_PATH -e "
     const fs = require('fs');
@@ -349,24 +377,44 @@ generate_witness_part3() {
     };
     
     fs.writeFileSync('$build_dir_3/input.json', JSON.stringify(inputPart3, null, 2));
-    console.log('Created Part3 input with miller_out from Part2');
+    console.log('  [Part3] Input created from Part2 outputs');
     "
     
+    local extract_end=$(date +%s)
+    echo "  [Part3] Extraction completed in $((extract_end - step_start))s"
+    
+    echo "  [Part3] Running witness generation (WASM) - This verifies FinalExp == 1..."
+    step_start=$(date +%s)
     # Generate witness using WASM
     $NODE_PATH "$build_dir_3/${circuit_name}_js/generate_witness.js" \
         "$build_dir_3/${circuit_name}_js/${circuit_name}.wasm" \
         "$build_dir_3/input.json" \
         "$build_dir_3/witness.wtns"
     
+    local witness_end=$(date +%s)
+    echo "  [Part3] Witness WASM completed in $((witness_end - step_start))s"
+    echo "  [Part3] ✓ FinalExponentiate verification PASSED!"
+    
+    echo "  [Part3] Exporting witness to JSON..."
+    step_start=$(date +%s)
     # Export to JSON
     snarkjs wtns export json "$build_dir_3/witness.wtns" "$build_dir_3/witness.json"
     
     local end=$(date +%s)
-    echo "Part3 witness generated in $((end - start))s"
+    echo "  [Part3] JSON export completed in $((end - step_start))s"
+    echo ""
+    echo ">>> Part3 TOTAL: $((end - start))s <<<"
+    PART3_TIME=$((end - start))
 }
 
 generate_all_witnesses() {
     log_step "PHASE: Generating witnesses (with chaining)"
+    
+    # Initialize timing variables
+    PART1_TIME=0
+    PART2_TIME=0
+    PART3_TIME=0
+    local total_start=$(date +%s)
     
     if [ "$MINI_MODE" = true ]; then
         prepare_mini_input
@@ -375,8 +423,23 @@ generate_all_witnesses() {
     generate_witness_part1
     generate_witness_part2
     generate_witness_part3
+    
+    local total_end=$(date +%s)
+    local total_time=$((total_end - total_start))
+    
     echo ""
-    echo "All witnesses generated successfully!"
+    echo "========================================"
+    echo "         WITNESS GENERATION SUMMARY"
+    echo "========================================"
+    echo "  Part1 (HashToField+Aggregation+MapToG2): ${PART1_TIME}s"
+    echo "  Part2 (MillerLoop):                      ${PART2_TIME}s"
+    echo "  Part3 (FinalExponentiate):               ${PART3_TIME}s"
+    echo "  ----------------------------------------"
+    echo "  TOTAL:                                   ${total_time}s"
+    echo "========================================"
+    echo ""
+    echo "✓ All witnesses generated successfully!"
+    echo "✓ BLS signature verification PASSED!"
 }
 
 # =============================================================================
