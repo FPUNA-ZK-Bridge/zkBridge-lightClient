@@ -1,0 +1,61 @@
+==============================================
+Verify Header Split Circuit - Build & Prove
+==============================================
+Script directory: /Users/josefigueredo/Desktop/web3/forkeado/zkBridge-lightClient/circuits/verify_header
+Build directory: /Users/josefigueredo/Desktop/web3/forkeado/zkBridge-lightClient/circuits/verify_header/build_split_one
+Node: node
+Validators: 1
+
+
+========================================
+PHASE: Generating witnesses (with chaining)
+========================================
+---- Preparing test input (1 validator(s))...
+Pre-generated input not found. Generating with Node.js...
+============================================================
+Generating valid BLS input for 1 validator(s)
+============================================================
+
+[1/5] Generating signing_root...
+  signing_root (hex): 601a845a9ea225309202e3e9403ccbaaedf821f47273ecef0e556a410760b660
+
+[2/5] Generating 1 BLS key pair(s)...
+  Validator 0: pk=956ad5613b0f1df4...
+
+[3/5] Signing message with each validator...
+  Validator 0 signed: sig=81d5fde38d7d05c5...
+
+[4/5] Aggregating signatures...
+  Aggregated signature: 81d5fde38d7d05c59b8c1cdb6ad121e5...
+  Signature valid: true
+
+[5/5] Converting to circuit format...
+  Converted 1 pubkey(s)
+  Converted signature
+
+============================================================
+✓ Generated valid input for 1 validator(s)
+✓ Output saved to: /Users/josefigueredo/Desktop/web3/forkeado/zkBridge-lightClient/circuits/verify_header/input/test_1_validator.json
+============================================================
+
+⚠️  NOTE: This uses @noble/bls12-381 hash_to_curve.
+   If the circuit fails, it may be due to hash_to_curve differences.
+   For guaranteed compatibility, use real Beacon Chain data.
+Generated valid input with 1 validator(s)
+---- Generating witness for Part1...
+  Input file: /Users/josefigueredo/Desktop/web3/forkeado/zkBridge-lightClient/circuits/verify_header/input/your_key_1_validator.json
+  [Part1] Running witness generation (WASM)...
+node:internal/modules/cjs/loader:1215
+  throw err;
+  ^
+
+Error: Cannot find module '/Users/josefigueredo/Desktop/web3/forkeado/zkBridge-lightClient/circuits/verify_header/build_split_one/part1/verify_header_one_part1_js/generate_witness.js'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1212:15)
+    at Module._load (node:internal/modules/cjs/loader:1043:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.19.0

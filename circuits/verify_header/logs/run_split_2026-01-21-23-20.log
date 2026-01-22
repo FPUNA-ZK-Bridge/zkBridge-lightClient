@@ -1,0 +1,14 @@
+==============================================
+Verify Header Split Circuit - Build & Prove
+==============================================
+Script directory: /Users/josefigueredo/Desktop/web3/forkeado/zkBridge-lightClient/circuits/verify_header
+Build directory: /Users/josefigueredo/Desktop/web3/forkeado/zkBridge-lightClient/circuits/verify_header/build_split_one
+Node: node
+Validators: 1
+
+
+========================================
+PHASE: Compiling all circuits (verify_header_one)
+========================================
+---- Compiling verify_header_one_part1.circom...
+This may take a while for large circuits...

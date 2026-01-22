@@ -205,7 +205,7 @@ get_input_file() {
     if [ "$ONE_MODE" = true ]; then
         echo "$INPUT_DIR/your_key_1_validator.json"
     elif [ "$MINI_MODE" = true ]; then
-        echo "$INPUT_DIR/test_8_validators.json"
+        echo "$INPUT_DIR/your_key_8_validators.json"
     else
         echo "$INPUT_DIR/${SLOT}_input.json"
     fi
@@ -432,7 +432,7 @@ generate_all_witnesses() {
     if [ "$ONE_MODE" = true ]; then
         prepare_test_input 1 "$INPUT_DIR/test_1_validator.json"
     elif [ "$MINI_MODE" = true ]; then
-        prepare_test_input 8 "$INPUT_DIR/test_8_validators.json"
+        prepare_test_input 8 "$INPUT_DIR/your_key_8_validators.json"
     fi
     
     generate_witness_part1
