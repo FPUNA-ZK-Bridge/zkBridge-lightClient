@@ -1,29 +1,27 @@
 #!/usr/bin/env node
 /**
- * Generate valid BLS signature input for 8 validators (mini mode).
- * 
- * This is MUCH faster than the Python version because @noble/bls12-381 is optimized.
+ * Generate valid BLS signature input for N validators.
  * 
  * Usage:
- *   npm install @noble/bls12-381
- *   node generate_mini_input.js [output_file]
+ *   node generate_test_input.js <num_validators> <output_file>
+ *   node generate_test_input.js 1 input/test_1_validator.json
+ *   node generate_test_input.js 8 input/test_8_validators.json
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// Dynamic import for ES module
 async function main() {
     const bls = await import('@noble/bls12-381');
     
-    const NUM_VALIDATORS = 8;
+    const NUM_VALIDATORS = parseInt(process.argv[2]) || 1;
+    const outputFile = process.argv[3] || `input/test_${NUM_VALIDATORS}_validator${NUM_VALIDATORS > 1 ? 's' : ''}.json`;
+    
     const N_BITS = 55n;
     const K_LIMBS = 7;
     
-    const outputFile = process.argv[2] || 'input/test_8_validators.json';
-    
     console.log('='.repeat(60));
-    console.log('Generating valid BLS input for 8 validators');
+    console.log(`Generating valid BLS input for ${NUM_VALIDATORS} validator(s)`);
     console.log('='.repeat(60));
     
     // Helper: Convert bigint to array of k limbs of n bits each
@@ -38,71 +36,47 @@ async function main() {
         return limbs;
     }
     
-    // Helper: Get bigint value from Fp element (handles different API versions)
+    // Helper: Get bigint value from Fp element
     function getFpValue(fp) {
-        // Try all possible ways to extract the bigint value
         if (typeof fp === 'bigint') return fp;
         if (fp.value !== undefined) {
             return typeof fp.value === 'bigint' ? fp.value : BigInt(fp.value);
         }
-        // For noble-bls12-381 Fp class, try accessing internal value
         if (fp._value !== undefined) return fp._value;
-        // Try toString conversion
         const str = fp.toString();
-        // If it's a hex string
         if (str.startsWith('0x')) return BigInt(str);
-        // If it's a decimal string
         return BigInt(str);
     }
     
     // Helper: Convert G1 point to circuit format
-    // toAffine() returns [x, y] array where x and y are Fp elements
     function g1ToCircuit(point) {
         const affine = point.toAffine();
-        // affine is [x, y] array
         const x = getFpValue(affine[0]);
         const y = getFpValue(affine[1]);
-        
-        console.log(`    G1 x: ${x.toString(16).slice(0, 20)}...`);
-        console.log(`    G1 y: ${y.toString(16).slice(0, 20)}...`);
-        
-        return [
-            bigintToLimbs(x),
-            bigintToLimbs(y)
-        ];
+        return [bigintToLimbs(x), bigintToLimbs(y)];
     }
     
     // Helper: Convert G2 point to circuit format
-    // toAffine() returns [x, y] where x and y are Fp2 elements
     function g2ToCircuit(point) {
         const affine = point.toAffine();
-        // affine is [x, y] where x and y are Fp2 elements
         const xFp2 = affine[0];
         const yFp2 = affine[1];
         
-        // Fp2 elements have c0 and c1 properties
         let x0, x1, y0, y1;
         
         if (xFp2.c0 !== undefined) {
-            // API with c0, c1 properties
             x0 = getFpValue(xFp2.c0);
             x1 = getFpValue(xFp2.c1);
             y0 = getFpValue(yFp2.c0);
             y1 = getFpValue(yFp2.c1);
         } else if (Array.isArray(xFp2)) {
-            // Array format [c0, c1]
             x0 = getFpValue(xFp2[0]);
             x1 = getFpValue(xFp2[1]);
             y0 = getFpValue(yFp2[0]);
             y1 = getFpValue(yFp2[1]);
         } else {
-            throw new Error(`Unknown Fp2 structure: ${typeof xFp2}, keys: ${Object.keys(xFp2 || {})}`);
+            throw new Error(`Unknown Fp2 structure`);
         }
-        
-        console.log(`    G2 x.c0: ${x0.toString(16).slice(0, 20)}...`);
-        console.log(`    G2 x.c1: ${x1.toString(16).slice(0, 20)}...`);
-        console.log(`    G2 y.c0: ${y0.toString(16).slice(0, 20)}...`);
-        console.log(`    G2 y.c1: ${y1.toString(16).slice(0, 20)}...`);
         
         return [
             [bigintToLimbs(x0), bigintToLimbs(x1)],
@@ -116,8 +90,8 @@ async function main() {
     const signingRoot = Array.from(signingRootBytes).map(b => b.toString());
     console.log(`  signing_root (hex): ${Buffer.from(signingRootBytes).toString('hex')}`);
     
-    // Step 2: Generate 8 key pairs
-    console.log(`\n[2/5] Generating ${NUM_VALIDATORS} BLS key pairs...`);
+    // Step 2: Generate key pairs
+    console.log(`\n[2/5] Generating ${NUM_VALIDATORS} BLS key pair(s)...`);
     const keypairs = [];
     for (let i = 0; i < NUM_VALIDATORS; i++) {
         const privateKey = bls.utils.randomPrivateKey();
@@ -135,14 +109,24 @@ async function main() {
         console.log(`  Validator ${i} signed: sig=${Buffer.from(sig).toString('hex').slice(0, 16)}...`);
     }
     
-    // Step 4: Aggregate signatures
+    // Step 4: Aggregate signatures (even for 1 validator)
     console.log(`\n[4/5] Aggregating signatures...`);
-    const aggregatedSignature = bls.aggregateSignatures(signatures);
+    let aggregatedSignature;
+    if (NUM_VALIDATORS === 1) {
+        aggregatedSignature = signatures[0];
+    } else {
+        aggregatedSignature = bls.aggregateSignatures(signatures);
+    }
     console.log(`  Aggregated signature: ${Buffer.from(aggregatedSignature).toString('hex').slice(0, 32)}...`);
     
     // Verify the aggregated signature
     const publicKeys = keypairs.map(kp => kp.publicKey);
-    const aggregatedPubkey = bls.aggregatePublicKeys(publicKeys);
+    let aggregatedPubkey;
+    if (NUM_VALIDATORS === 1) {
+        aggregatedPubkey = publicKeys[0];
+    } else {
+        aggregatedPubkey = bls.aggregatePublicKeys(publicKeys);
+    }
     const isValid = await bls.verify(aggregatedSignature, signingRootBytes, aggregatedPubkey);
     console.log(`  Signature valid: ${isValid}`);
     
@@ -154,26 +138,18 @@ async function main() {
     // Step 5: Convert to circuit format
     console.log(`\n[5/5] Converting to circuit format...`);
     
-    // Debug: inspect point structure
-    const samplePoint = bls.PointG1.fromHex(keypairs[0].publicKey);
-    const sampleAffine = samplePoint.toAffine();
-    console.log(`  Debug - G1 affine is array: ${Array.isArray(sampleAffine)}, length: ${sampleAffine.length}`);
-    
     // Convert pubkeys
     const pubkeysCircuit = [];
     for (let i = 0; i < NUM_VALIDATORS; i++) {
         const g1Point = bls.PointG1.fromHex(keypairs[i].publicKey);
         pubkeysCircuit.push(g1ToCircuit(g1Point));
     }
-    console.log(`  Converted ${pubkeysCircuit.length} pubkeys`);
+    console.log(`  Converted ${pubkeysCircuit.length} pubkey(s)`);
     
     // Convert aggregated signature (G2 point)
     const sigG2 = bls.PointG2.fromSignature(aggregatedSignature);
-    const sigAffine = sigG2.toAffine();
-    console.log(`  Debug - G2 affine is array: ${Array.isArray(sigAffine)}, x has c0: ${sigAffine[0]?.c0 !== undefined}`);
-    
     const signatureCircuit = g2ToCircuit(sigG2);
-    console.log(`  Converted aggregated signature`);
+    console.log(`  Converted signature`);
     
     // All validators participated
     const pubkeybits = Array(NUM_VALIDATORS).fill('1');
@@ -188,15 +164,19 @@ async function main() {
     
     // Write to file
     const outputDir = path.dirname(outputFile);
-    if (outputDir && !fs.existsSync(outputDir)) {
+    if (outputDir && outputDir !== '.' && !fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
     }
     fs.writeFileSync(outputFile, JSON.stringify(inputData, null, 2));
     
     console.log(`\n${'='.repeat(60)}`);
-    console.log(`✓ Generated valid input for ${NUM_VALIDATORS} validators`);
+    console.log(`✓ Generated valid input for ${NUM_VALIDATORS} validator(s)`);
     console.log(`✓ Output saved to: ${outputFile}`);
     console.log('='.repeat(60));
+    
+    console.log('\n⚠️  NOTE: This uses @noble/bls12-381 hash_to_curve.');
+    console.log('   If the circuit fails, it may be due to hash_to_curve differences.');
+    console.log('   For guaranteed compatibility, use real Beacon Chain data.');
 }
 
 main().catch(err => {

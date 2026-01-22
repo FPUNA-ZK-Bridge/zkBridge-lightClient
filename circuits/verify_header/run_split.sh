@@ -26,15 +26,24 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_BASE="$SCRIPT_DIR/build_split"
 
-# Check for mini mode
+# Check for mode
 MINI_MODE=false
+ONE_MODE=false
 for arg in "$@"; do
     if [ "$arg" == "--mini" ]; then
         MINI_MODE=true
     fi
+    if [ "$arg" == "--one" ]; then
+        ONE_MODE=true
+    fi
 done
 
-if [ "$MINI_MODE" = true ]; then
+if [ "$ONE_MODE" = true ]; then
+    echo ">>> ONE MODE: Using 1 validator for minimal testing <<<"
+    BUILD_BASE="$SCRIPT_DIR/build_split_one"
+    CIRCUIT_PREFIX="verify_header_one"
+    NUM_VALIDATORS=1
+elif [ "$MINI_MODE" = true ]; then
     echo ">>> MINI MODE: Using 8 validators for testing <<<"
     BUILD_BASE="$SCRIPT_DIR/build_split_mini"
     CIRCUIT_PREFIX="verify_header_mini"
@@ -163,43 +172,39 @@ compile_all() {
 # Input Preparation
 # =============================================================================
 
-prepare_mini_input() {
-    log_substep "Preparing mini input (8 validators with valid BLS signature)..."
+prepare_test_input() {
+    local num_validators=$1
+    local input_file=$2
     
-    # Use pre-generated valid input file
-    local valid_input="$INPUT_DIR/test_8_validators.json"
+    log_substep "Preparing test input ($num_validators validator(s))..."
     
-    if [ -f "$valid_input" ]; then
-        echo "Using pre-generated valid input: $valid_input"
+    if [ -f "$input_file" ]; then
+        echo "Using pre-generated valid input: $input_file"
         return 0
     fi
     
-    # Fallback: try to generate if Python is available
-    local gen_script="$SCRIPT_DIR/generate_mini_input.py"
-    if [ -f "$gen_script" ]; then
-        echo "Pre-generated input not found. Attempting to generate..."
+    # Try to generate with JavaScript (faster)
+    local gen_script_js="$SCRIPT_DIR/generate_test_input.js"
+    if [ -f "$gen_script_js" ]; then
+        echo "Pre-generated input not found. Generating with Node.js..."
+        $NODE_PATH "$gen_script_js" "$num_validators" "$input_file"
         
-        if ! python3 -c "import py_ecc" 2>/dev/null; then
-            echo "Installing py_ecc..."
-            pip3 install py_ecc --quiet 2>/dev/null || pip3 install --user py_ecc --quiet
-        fi
-        
-        python3 "$gen_script" --output "$valid_input"
-        
-        if [ -f "$valid_input" ]; then
-            echo "Generated valid mini input with 8 validators"
+        if [ -f "$input_file" ]; then
+            echo "Generated valid input with $num_validators validator(s)"
             return 0
         fi
     fi
     
-    echo "ERROR: Mini input file not found: $valid_input"
+    echo "ERROR: Input file not found: $input_file"
     echo "Please generate it first by running:"
-    echo "  python3 generate_mini_input.py --output input/test_8_validators.json"
+    echo "  node generate_test_input.js $num_validators $input_file"
     exit 1
 }
 
 get_input_file() {
-    if [ "$MINI_MODE" = true ]; then
+    if [ "$ONE_MODE" = true ]; then
+        echo "$INPUT_DIR/your_key_1_validator.json"
+    elif [ "$MINI_MODE" = true ]; then
         echo "$INPUT_DIR/test_8_validators.json"
     else
         echo "$INPUT_DIR/${SLOT}_input.json"
@@ -383,7 +388,11 @@ generate_witness_part3() {
     local extract_end=$(date +%s)
     echo "  [Part3] Extraction completed in $((extract_end - step_start))s"
     
-    echo "  [Part3] Running witness generation (WASM) - This verifies FinalExp == 1..."
+    if [ "$MINI_MODE" = true ] && [ "$ONE_MODE" = false ]; then
+        echo "  [Part3] Running witness generation (WASM) - TEST MODE (no signature verification)..."
+    else
+        echo "  [Part3] Running witness generation (WASM) - This verifies FinalExp == 1..."
+    fi
     step_start=$(date +%s)
     # Generate witness using WASM
     $NODE_PATH "$build_dir_3/${circuit_name}_js/generate_witness.js" \
@@ -393,7 +402,11 @@ generate_witness_part3() {
     
     local witness_end=$(date +%s)
     echo "  [Part3] Witness WASM completed in $((witness_end - step_start))s"
-    echo "  [Part3] ✓ FinalExponentiate verification PASSED!"
+    if [ "$MINI_MODE" = true ] && [ "$ONE_MODE" = false ]; then
+        echo "  [Part3] ✓ FinalExponentiate computed (TEST MODE - not verified)"
+    else
+        echo "  [Part3] ✓ FinalExponentiate verification PASSED!"
+    fi
     
     echo "  [Part3] Exporting witness to JSON..."
     step_start=$(date +%s)
@@ -416,8 +429,10 @@ generate_all_witnesses() {
     PART3_TIME=0
     local total_start=$(date +%s)
     
-    if [ "$MINI_MODE" = true ]; then
-        prepare_mini_input
+    if [ "$ONE_MODE" = true ]; then
+        prepare_test_input 1 "$INPUT_DIR/test_1_validator.json"
+    elif [ "$MINI_MODE" = true ]; then
+        prepare_test_input 8 "$INPUT_DIR/test_8_validators.json"
     fi
     
     generate_witness_part1
@@ -439,7 +454,15 @@ generate_all_witnesses() {
     echo "========================================"
     echo ""
     echo "✓ All witnesses generated successfully!"
-    echo "✓ BLS signature verification PASSED!"
+    if [ "$ONE_MODE" = true ]; then
+        echo "✓ BLS signature verification PASSED! (1 validator)"
+    elif [ "$MINI_MODE" = true ]; then
+        echo ""
+        echo "⚠️  NOTE: Mini mode uses TEST-ONLY Part3 (no signature verification)."
+        echo "    For real BLS verification, use --one or production mode."
+    else
+        echo "✓ BLS signature verification PASSED! (512 validators)"
+    fi
 }
 
 # =============================================================================
