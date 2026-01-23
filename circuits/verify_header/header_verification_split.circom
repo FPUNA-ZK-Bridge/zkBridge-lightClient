@@ -109,15 +109,20 @@ template VerifyHeaderPart1(b, n, k) {
     // =========================================================================
     // Step 4: Calculate bitSum
     // =========================================================================
-    signal partialSum[b-1];
-    for (var i = 0; i < b - 1; i++) {
-        if (i == 0) {
-            partialSum[i] <== pubkeybits[0] + pubkeybits[1];
-        } else {
-            partialSum[i] <== partialSum[i-1] + pubkeybits[i+1];
+    // Handle special case of 1 validator (b=1)
+    if (b == 1) {
+        bitSum <== pubkeybits[0];
+    } else {
+        signal partialSum[b-1];
+        for (var i = 0; i < b - 1; i++) {
+            if (i == 0) {
+                partialSum[i] <== pubkeybits[0] + pubkeybits[1];
+            } else {
+                partialSum[i] <== partialSum[i-1] + pubkeybits[i+1];
+            }
         }
+        bitSum <== partialSum[b-2];
     }
-    bitSum <== partialSum[b-2];
 
     // =========================================================================
     // Step 5: Calculate Poseidon merkle root of pubkeys

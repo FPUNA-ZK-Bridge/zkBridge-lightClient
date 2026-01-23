@@ -430,7 +430,7 @@ generate_all_witnesses() {
     local total_start=$(date +%s)
     
     if [ "$ONE_MODE" = true ]; then
-        prepare_test_input 1 "$INPUT_DIR/test_1_validator.json"
+        prepare_test_input 1 "$INPUT_DIR/your_key_1_validator.json"
     elif [ "$MINI_MODE" = true ]; then
         prepare_test_input 8 "$INPUT_DIR/your_key_8_validators.json"
     fi
