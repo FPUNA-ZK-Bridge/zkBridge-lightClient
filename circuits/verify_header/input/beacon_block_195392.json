@@ -1,0 +1,52 @@
+{
+  "_NOTE": "PLACEHOLDER FILE - Please save your full beacon data JSON here",
+  "_INSTRUCTIONS": "Run: node generate_from_beacon_data.js input/YOUR_BEACON_FILE.json output.json 8 holesky",
+  "timestamp": "2025-11-05T17:14:19.765Z",
+  "blockRoot": "0xad0941b12ee7ef8896d45d00e86aa0a1134a52d9502272c0f30c99ed0b423bb1",
+  "blockHeader": {
+    "slot": "195392",
+    "proposer_index": "30025",
+    "parent_root": "0x81efd190d87add7b86a5ceb75b1edb25d861fcbf7691004a922fc1aa91438380",
+    "state_root": "0xa99f71ee9ac50ea13c115de1d09fe68269717acefa714f57fda04b9564cc9754",
+    "sync_aggregate": {
+      "sync_committee_bits": "0xffffbffffffffffffff7feffdfffffffffffffffffffffffffff7ffffffffeffffffffffffffffffff7fffff7ffffffffffffffbffffffffffffffffffffff7f",
+      "sync_committee_signature": "0x87d23dfb241a830715d88663cdc40ced892bb3e7197ef9c880e97aa526c2f1245c7332b5cabc2ff071694bfa5ded62170ba6ce14b015183000287f2b766bfc36dfdec3cf984717e9012d7556c7576049284783215864050ece2fd64d45e275a6"
+    }
+  },
+  "participation": {
+    "participation": 98.05,
+    "bitsArray": [
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,0,
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1
+    ],
+    "totalParticipants": 502,
+    "totalCommitteeSize": 512
+  },
+  "syncCommittee": {
+    "pubkeys": [
+      "0x8d68345d8bcc61755ee62b91922072738e666a08b6426bcc23afa76f940a9c32565611c7fd138e711656304d61fb3bb8",
+      "0x907e47af845743cd2e0b489fb462b4beb1dbb50177ef0c8e684f5d860d4d7eafa7b1dc9d61f0878a4742076947bbd9ca",
+      "0xb30a95bc78f1b3f3869ed2991340cf611bfc144735491c57d26f030184ee68ef152651ad19ff59d37f3d75216313a6e2",
+      "0x819e91784a921e6b62544533a16883c1ad92af351d31c5e979a5d251b4ed7378ab4dd7374d909dc9f8eb3eda53be0124",
+      "0xa672af468d22d398ea5470c3f367c01619b50ab3fda57a536444536f55a4afd03fac9f11aeefa0c820e5f43d828ac25c",
+      "0x91f1619468f890d719635779e9a0ef0e839c185d3a10245c2ec0a0304d78e00795d8ded776b6e297c04a7c802fbc9dfb",
+      "0xaed6a0ff5f812146ce1cf0b335ef1c05c6da160c6d3a41dbf6eb6d1bd3d63741cc6313b313d3b358910dca4b59bd88ba",
+      "0xa3dea8b8cea5f2b29e49100b36afd96488391173e8dad3444b1be1087b351c2902c137da47934b50045f22691e287204"
+    ],
+    "aggregate_pubkey": "0xb26340fa937671064742a1dcdcdf1d110a3742c36166d8b3d4f0c7806ebf8564074ed39e51e682801d6287f07332dc95"
+  }
+}

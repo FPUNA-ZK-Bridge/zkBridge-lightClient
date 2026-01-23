@@ -12,13 +12,21 @@
 #   Part3: FinalExponentiate + Verification
 #
 # Usage: 
-#   ./run_split.sh [--mini] [--compile-only] [--witness-only] [--full]
+#   ./run_split.sh [--mini|--one] [--beacon <file>] [--compile-only] [--witness-only] [--full]
 #
 # Options:
-#   --mini          Use mini version (8 validators) for testing on low-RAM machines
-#   --compile-only  Only compile the circuits
-#   --witness-only  Only generate witnesses (requires compiled circuits)
-#   --full          Full pipeline: compile + witness + zkey + proof (default)
+#   --mini            Use mini version (8 validators) for testing
+#   --one             Use 1 validator for minimal testing
+#   --beacon <file>   Generate input from real Beacon Chain data JSON
+#   --network <net>   Network for beacon data: mainnet, goerli, sepolia, holesky (default: holesky)
+#   --compile-only    Only compile the circuits
+#   --witness-only    Only generate witnesses (requires compiled circuits)
+#   --full            Full pipeline: compile + witness + zkey + proof (default)
+#
+# Examples:
+#   ./run_split.sh --mini --witness-only
+#   ./run_split.sh --one --beacon input/beacon_data.json --network holesky
+#   ./run_split.sh --mini --beacon input/my_beacon_block.json
 # =============================================================================
 
 set -e
@@ -26,16 +34,51 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_BASE="$SCRIPT_DIR/build_split"
 
-# Check for mode
+# Save original arguments
+ORIGINAL_ARGS=("$@")
+
+# Check for mode and beacon file
 MINI_MODE=false
 ONE_MODE=false
-for arg in "$@"; do
-    if [ "$arg" == "--mini" ]; then
-        MINI_MODE=true
-    fi
-    if [ "$arg" == "--one" ]; then
-        ONE_MODE=true
-    fi
+BEACON_FILE=""
+NETWORK="holesky"
+COMPILE_ONLY=false
+WITNESS_ONLY=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --mini)
+            MINI_MODE=true
+            shift
+            ;;
+        --one)
+            ONE_MODE=true
+            shift
+            ;;
+        --beacon)
+            BEACON_FILE="$2"
+            shift 2
+            ;;
+        --network)
+            NETWORK="$2"
+            shift 2
+            ;;
+        --compile-only)
+            COMPILE_ONLY=true
+            shift
+            ;;
+        --witness-only)
+            WITNESS_ONLY=true
+            shift
+            ;;
+        --full)
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
 done
 
 if [ "$ONE_MODE" = true ]; then
@@ -134,8 +177,21 @@ compile_circuit() {
     local part_num=$1
     local circuit_name="${CIRCUIT_PREFIX}_part${part_num}"
     local build_dir="$BUILD_BASE/part${part_num}"
+    local circom_file="$SCRIPT_DIR/${circuit_name}.circom"
+    local r1cs_file="$build_dir/${circuit_name}.r1cs"
     
-    if [ -f "$build_dir/${circuit_name}.r1cs" ]; then
+    # Check if we need to recompile (r1cs doesn't exist or circom is newer)
+    local needs_compile=false
+    if [ ! -f "$r1cs_file" ]; then
+        needs_compile=true
+    elif [ -f "$circom_file" ] && [ "$circom_file" -nt "$r1cs_file" ]; then
+        log_substep "Circuit $circuit_name.circom is newer than compiled version, recompiling..."
+        needs_compile=true
+        # Remove old compiled files
+        rm -f "$r1cs_file" "$build_dir/${circuit_name}.sym" "$build_dir/${circuit_name}_js"/*.wasm 2>/dev/null || true
+    fi
+    
+    if [ "$needs_compile" = false ]; then
         log_substep "Circuit $circuit_name already compiled, skipping..."
         return 0
     fi
@@ -144,7 +200,7 @@ compile_circuit() {
     echo "This may take a while for large circuits..."
     local start=$(date +%s)
     
-    circom "$SCRIPT_DIR/${circuit_name}.circom" \
+    circom "$circom_file" \
         --O1 \
         --r1cs \
         --wasm \
@@ -157,7 +213,7 @@ compile_circuit() {
     # Show constraint count
     if command -v snarkjs &> /dev/null; then
         echo "Constraint info:"
-        snarkjs r1cs info "$build_dir/${circuit_name}.r1cs" 2>/dev/null || true
+        snarkjs r1cs info "$r1cs_file" 2>/dev/null || true
     fi
 }
 
@@ -202,6 +258,13 @@ prepare_test_input() {
 }
 
 get_input_file() {
+    # If beacon file was specified, generate input from it first
+    if [ -n "$BEACON_FILE" ]; then
+        local beacon_input="$INPUT_DIR/beacon_generated_${NUM_VALIDATORS}.json"
+        echo "$beacon_input"
+        return
+    fi
+    
     if [ "$ONE_MODE" = true ]; then
         echo "$INPUT_DIR/your_key_1_validator.json"
     elif [ "$MINI_MODE" = true ]; then
@@ -209,6 +272,50 @@ get_input_file() {
     else
         echo "$INPUT_DIR/${SLOT}_input.json"
     fi
+}
+
+# Generate input from Beacon Chain data if specified
+generate_beacon_input() {
+    if [ -z "$BEACON_FILE" ]; then
+        return 0
+    fi
+    
+    # Convert to absolute path if relative
+    local beacon_abs_path
+    if [[ "$BEACON_FILE" = /* ]]; then
+        beacon_abs_path="$BEACON_FILE"
+    else
+        beacon_abs_path="$SCRIPT_DIR/$BEACON_FILE"
+    fi
+    
+    if [ ! -f "$beacon_abs_path" ]; then
+        echo "ERROR: Beacon data file not found: $beacon_abs_path"
+        echo "  (Original path: $BEACON_FILE)"
+        exit 1
+    fi
+    
+    local output_file="$INPUT_DIR/beacon_generated_${NUM_VALIDATORS}.json"
+    
+    log_step "Generating input from Beacon Chain data"
+    echo "  Beacon file: $beacon_abs_path"
+    echo "  Network: $NETWORK"
+    echo "  Validators: $NUM_VALIDATORS"
+    echo "  Output: $output_file"
+    
+    # Run the generator script from circom-pairing dir (for npm dependencies)
+    cd "$SCRIPT_DIR/../utils/circom-pairing" && \
+    $NODE_PATH "$SCRIPT_DIR/generate_from_beacon_data.js" \
+        "$beacon_abs_path" \
+        "$output_file" \
+        "$NUM_VALIDATORS" \
+        "$NETWORK"
+    
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Failed to generate input from beacon data"
+        exit 1
+    fi
+    
+    echo "  SUCCESS: Generated $output_file"
 }
 
 # =============================================================================
@@ -429,7 +536,10 @@ generate_all_witnesses() {
     PART3_TIME=0
     local total_start=$(date +%s)
     
-    if [ "$ONE_MODE" = true ]; then
+    # Generate input from Beacon Chain data if specified
+    if [ -n "$BEACON_FILE" ]; then
+        generate_beacon_input
+    elif [ "$ONE_MODE" = true ]; then
         prepare_test_input 1 "$INPUT_DIR/your_key_1_validator.json"
     elif [ "$MINI_MODE" = true ]; then
         prepare_test_input 8 "$INPUT_DIR/your_key_8_validators.json"
@@ -658,17 +768,21 @@ main() {
     echo "Validators: $NUM_VALIDATORS"
     echo ""
     
-    # Parse mode (skip --mini as it's already handled)
+    # Determine mode from already-parsed variables
     local mode="full"
-    for arg in "$@"; do
+    if [ "$COMPILE_ONLY" = true ]; then
+        mode="compile"
+    elif [ "$WITNESS_ONLY" = true ]; then
+        mode="witness"
+    fi
+    
+    # Also check original args for other modes
+    for arg in "${ORIGINAL_ARGS[@]}"; do
         case "$arg" in
-            --compile-only) mode="compile" ;;
-            --witness-only) mode="witness" ;;
             --zkey-only) mode="zkey" ;;
             --proof-only) mode="proof" ;;
             --export-verifiers) mode="export" ;;
             --summary) mode="summary" ;;
-            --full) mode="full" ;;
         esac
     done
     
@@ -711,4 +825,4 @@ main() {
 
 # Run with logging
 mkdir -p "$SCRIPT_DIR/logs"
-main "$@" 2>&1 | tee "$SCRIPT_DIR/logs/run_split_$(date '+%Y-%m-%d-%H-%M').log"
+main 2>&1 | tee "$SCRIPT_DIR/logs/run_split_$(date '+%Y-%m-%d-%H-%M').log"
