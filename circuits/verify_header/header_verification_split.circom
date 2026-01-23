@@ -109,11 +109,16 @@ template VerifyHeaderPart1(b, n, k) {
     // =========================================================================
     // Step 4: Calculate bitSum
     // =========================================================================
-    // Handle special case of 1 validator (b=1)
+    // Use max(b-1, 1) to avoid zero-sized array
+    var partialSumSize = b > 1 ? b - 1 : 1;
+    signal partialSum[partialSumSize];
+    
     if (b == 1) {
+        // Special case: only 1 validator
+        partialSum[0] <== pubkeybits[0];
         bitSum <== pubkeybits[0];
     } else {
-        signal partialSum[b-1];
+        // Normal case: 2+ validators
         for (var i = 0; i < b - 1; i++) {
             if (i == 0) {
                 partialSum[i] <== pubkeybits[0] + pubkeybits[1];
