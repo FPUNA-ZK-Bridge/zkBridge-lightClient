@@ -388,7 +388,7 @@ generate_witness_part3() {
     local extract_end=$(date +%s)
     echo "  [Part3] Extraction completed in $((extract_end - step_start))s"
     
-    if [ "$MINI_MODE" = true ] && [ "$ONE_MODE" = false ]; then
+    if [ "$MINI_MODE" = true ] || [ "$ONE_MODE" = true ]; then
         echo "  [Part3] Running witness generation (WASM) - TEST MODE (no signature verification)..."
     else
         echo "  [Part3] Running witness generation (WASM) - This verifies FinalExp == 1..."
@@ -402,7 +402,7 @@ generate_witness_part3() {
     
     local witness_end=$(date +%s)
     echo "  [Part3] Witness WASM completed in $((witness_end - step_start))s"
-    if [ "$MINI_MODE" = true ] && [ "$ONE_MODE" = false ]; then
+    if [ "$MINI_MODE" = true ] || [ "$ONE_MODE" = true ]; then
         echo "  [Part3] ✓ FinalExponentiate computed (TEST MODE - not verified)"
     else
         echo "  [Part3] ✓ FinalExponentiate verification PASSED!"
@@ -454,12 +454,11 @@ generate_all_witnesses() {
     echo "========================================"
     echo ""
     echo "✓ All witnesses generated successfully!"
-    if [ "$ONE_MODE" = true ]; then
-        echo "✓ BLS signature verification PASSED! (1 validator)"
-    elif [ "$MINI_MODE" = true ]; then
+    if [ "$ONE_MODE" = true ] || [ "$MINI_MODE" = true ]; then
         echo ""
-        echo "⚠️  NOTE: Mini mode uses TEST-ONLY Part3 (no signature verification)."
-        echo "    For real BLS verification, use --one or production mode."
+        echo "⚠️  NOTE: Test mode uses TEST-ONLY Part3 (no signature verification)."
+        echo "    The circuit computes FinalExponentiate but does not verify == 1."
+        echo "    For real BLS verification, use production mode with real Beacon Chain data."
     else
         echo "✓ BLS signature verification PASSED! (512 validators)"
     fi
