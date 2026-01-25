@@ -2,3 +2,27 @@
 circuits/node_modules/
 contracts/exports/address.txt
 .DS_Store
+
+# Circom / snarkjs build artifacts
+circuits/**/build*/
+circuits/**/*_js/
+circuits/**/*_cpp/
+
+# Heavy artifacts
+**/*.r1cs
+**/*.wasm
+**/*.sym
+**/*.zkey
+**/*.wtns
+
+# snarkjs outputs
+**/proof.json
+**/public.json
+**/vkey.json
+**/calldata.txt
+
+# logs / crash dumps
+**/logs/
+**/*.log
+core
+core.*
