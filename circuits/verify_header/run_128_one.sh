@@ -3,20 +3,13 @@
 # =============================================================================
 # Verify Header 128 Split Circuit - ONE Version (1 validator, 8 parts)
 # =============================================================================
-# This script follows the same structure as run_128_mini.sh but targets a single
-# validator (b=1) while still executing the full 8-part design:
-#   Part 1A: HashToField + Poseidon + bitSum              (b=1 wrapper)
-#   Part 1B: Aggregated pubkey                            (b=1 wrapper)
-#   Part 1C: Checks + MapToG2 core
-#   Part 1D: ClearCofactorG2 (first half)
-#   Part 1E: ClearCofactorG2 (second half)
-#   Part 2:  MillerLoop
-#   Part 3A: FinalExpEasyPart
-#   Part 3B: FinalExpHardPart + computed validity (NOT constrained)
+# Same structure as run_128_mini.sh, but for exactly 1 validator (b=1) and
+# still running the full 8-part design (Part1A..Part3B).
 #
-# Notes:
-# - Signature validity is COMPUTED in Part 3B but NOT constrained to be true,
-#   so the pipeline can run end-to-end even when the signature is invalid.
+# Important behavior for ONE mode:
+# - Part 3B uses the ONE circuit variant which computes validity but DOES NOT
+#   constrain it to 1, so the pipeline can complete even if the signature is
+#   invalid (expected for test inputs).
 #
 # Usage:
 #   ./run_128_one.sh                    # Full pipeline (default)
@@ -29,9 +22,10 @@
 #   ./run_128_one.sh --clean            # Remove all build artifacts
 #
 # Environment Variables:
-#   SLOT          - Beacon slot number (default: 6154570)
-#   PTAU_FILE     - Path to Powers of Tau file
-#   NODE_MEM      - Node.js memory limit in MB (default: 16384)
+#   SLOT              - Beacon slot number (default: 6154570)
+#   PTAU_FILE         - Path to Powers of Tau file
+#   NODE_MEM          - Node.js memory limit in MB (default: 16384)
+#   PATCHED_NODE_PATH - Optional path to patched node binary
 # =============================================================================
 
 set -e
@@ -85,9 +79,21 @@ PTAU_PATHS=(
     "$HOME/ptau/pot25_final.ptau"
 )
 
-# Node.js configuration
+# Node.js configuration (prefers patched node if available)
 NODE_MEM="${NODE_MEM:-16384}"
-if command -v node &> /dev/null; then
+
+is_runnable_node() {
+    local p="$1"
+    [ -n "$p" ] && [ -f "$p" ] && [ -x "$p" ] && "$p" --version >/dev/null 2>&1
+}
+
+if is_runnable_node "${PATCHED_NODE_PATH:-}"; then
+    NODE_PATH="$PATCHED_NODE_PATH"
+    NODE_OPTS="--max-old-space-size=$NODE_MEM"
+elif is_runnable_node "$SCRIPT_DIR/../../node/out/Release/node"; then
+    NODE_PATH="$SCRIPT_DIR/../../node/out/Release/node"
+    NODE_OPTS="--max-old-space-size=$NODE_MEM"
+elif command -v node &> /dev/null; then
     NODE_PATH="node"
     NODE_OPTS="--max-old-space-size=$NODE_MEM"
 else
@@ -241,6 +247,7 @@ compile_part() {
     local circuit_name="${CIRCUIT_PREFIX}_${part}"
     local build_dir="$BUILD_DIR/$part"
     local circom_file="$SCRIPT_DIR/${circuit_name}.circom"
+    local r1cs_file="$build_dir/${circuit_name}.r1cs"
 
     if [ ! -f "$circom_file" ]; then
         log_error "Circuit file not found: $circom_file"
@@ -248,10 +255,23 @@ compile_part() {
         exit 1
     fi
 
-    if [ -f "$build_dir/${circuit_name}.r1cs" ]; then
+    local needs_compile=0
+    if [ ! -f "$r1cs_file" ]; then
+        needs_compile=1
+    elif [ "$circom_file" -nt "$r1cs_file" ]; then
+        needs_compile=1
+    fi
+
+    if [ $needs_compile -eq 0 ]; then
         log_info "Part $part already compiled, skipping..."
         dashboard_complete_part
         return 0
+    fi
+
+    if [ -f "$r1cs_file" ]; then
+        log_info "Circuit source updated; recompiling Part $part..."
+        rm -f "$r1cs_file" "$build_dir/${circuit_name}.sym" "$build_dir/${circuit_name}.wasm" 2>/dev/null || true
+        rm -rf "$build_dir/${circuit_name}_js" 2>/dev/null || true
     fi
 
     log_step "Compiling Part $part ($circuit_name)..."
@@ -273,7 +293,7 @@ compile_part() {
 
     if command -v snarkjs &> /dev/null; then
         log_info "Constraints:"
-        snarkjs r1cs info "$build_dir/${circuit_name}.r1cs" 2>/dev/null | grep -E "Constraints|Private|Public|Labels" || true
+        snarkjs r1cs info "$r1cs_file" 2>/dev/null | grep -E "Constraints|Private|Public|Labels" || true
     fi
 }
 
@@ -315,7 +335,18 @@ generate_witness_part1a() {
 
     local start=$(date +%s)
 
-    cp "$input_file" "$build_dir/input.json"
+    # IMPORTANT: part1a does not consume \"signature\". Passing extra fields
+    # makes witness generation fail (\"Too many signals set\").
+    $NODE_PATH -e "
+    const fs = require('fs');
+    const full = JSON.parse(fs.readFileSync('$input_file', 'utf8'));
+    const input = {
+      signing_root: full.signing_root,
+      pubkeys: full.pubkeys,
+      pubkeybits: full.pubkeybits
+    };
+    fs.writeFileSync('$build_dir/input.json', JSON.stringify(input, null, 2));
+    "
 
     $NODE_PATH $NODE_OPTS \
         "$build_dir/${circuit_name}_js/generate_witness.js" \
@@ -333,11 +364,20 @@ generate_witness_part1b() {
     local circuit_name="${CIRCUIT_PREFIX}_part1b"
     local input_file="$INPUT_DIR/${SLOT}_input_one.json"
 
-    log_step "Generating witness for Part 1B (Aggregated pubkey)..."
+    log_step "Generating witness for Part 1B (Accumulated pubkey)..."
 
     local start=$(date +%s)
 
-    cp "$input_file" "$build_dir/input.json"
+    # IMPORTANT: part1b only needs pubkeys/pubkeybits.
+    $NODE_PATH -e "
+    const fs = require('fs');
+    const full = JSON.parse(fs.readFileSync('$input_file', 'utf8'));
+    const input = {
+      pubkeys: full.pubkeys,
+      pubkeybits: full.pubkeybits
+    };
+    fs.writeFileSync('$build_dir/input.json', JSON.stringify(input, null, 2));
+    "
 
     $NODE_PATH $NODE_OPTS \
         "$build_dir/${circuit_name}_js/generate_witness.js" \
@@ -929,6 +969,7 @@ print_summary() {
     echo "  Mode:       ONE (1 validator - 8-part split)"
     echo "  Build dir:  $BUILD_DIR"
     echo "  Input slot: $SLOT"
+    echo "  Node:       $NODE_PATH (max ${NODE_MEM}MB)"
     echo ""
 
     echo "Circuit Files:"
@@ -941,27 +982,6 @@ print_summary() {
         [ -f "$build_dir/${circuit_name}.zkey" ] && echo -e "    ${GREEN}✓${NC} zkey generated" || echo -e "    ${RED}✗${NC} zkey"
         [ -f "$build_dir/proof.json" ] && echo -e "    ${GREEN}✓${NC} proof generated" || echo -e "    ${RED}✗${NC} proof"
     done
-
-    if [ -f "$BUILD_DIR/part1a/witness.json" ]; then
-        echo ""
-        echo "Part 1A Outputs (for on-chain verification):"
-        $NODE_PATH -e "
-        const fs = require('fs');
-        const w = JSON.parse(fs.readFileSync('$BUILD_DIR/part1a/witness.json', 'utf8'));
-        console.log('  bitSum:                ', w[29]);
-        console.log('  syncCommitteePoseidon: ', w[30]);
-        "
-    fi
-
-    if [ -f "$BUILD_DIR/part3b/witness.json" ]; then
-        echo ""
-        echo "Part 3B Output (computed validity, not constrained):"
-        $NODE_PATH -e "
-        const fs = require('fs');
-        const w = JSON.parse(fs.readFileSync('$BUILD_DIR/part3b/witness.json', 'utf8'));
-        console.log('  isValid (0/1):', w[w.length - 1]);
-        "
-    fi
 }
 
 # =============================================================================
@@ -1046,9 +1066,10 @@ main() {
             echo "  --help              Show this help"
             echo ""
             echo "Environment variables:"
-            echo "  SLOT       Beacon slot number (default: 6154570)"
-            echo "  PTAU_FILE  Path to Powers of Tau file"
-            echo "  NODE_MEM   Node.js memory limit in MB (default: 16384)"
+            echo "  SLOT              Beacon slot number (default: 6154570)"
+            echo "  PTAU_FILE         Path to Powers of Tau file"
+            echo "  NODE_MEM          Node.js memory limit in MB (default: 16384)"
+            echo "  PATCHED_NODE_PATH Optional path to patched node binary"
             ;;
         --full|*)
             compile_all
