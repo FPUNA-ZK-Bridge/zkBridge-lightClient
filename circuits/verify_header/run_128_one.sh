@@ -73,10 +73,12 @@ LOG_DIR="$SCRIPT_DIR/logs"
 # Powers of Tau file locations (in order of preference)
 PTAU_PATHS=(
     "${PTAU_FILE:-}"
+    "/home_data/mvillagra/tusima-jose/powers_of_tau/powersOfTau28_hez_final_27.ptau"
     "$SCRIPT_DIR/pot25_final.ptau"
     "$SCRIPT_DIR/../utils/circom-pairing/circuits/pot25_final.ptau"
     "$SCRIPT_DIR/../../powers_of_tau/powersOfTau28_hez_final_27.ptau"
     "$HOME/ptau/pot25_final.ptau"
+    
 )
 
 # Node.js configuration (prefers patched node if available)
@@ -270,6 +272,19 @@ compile_part() {
 
     if [ -f "$r1cs_file" ]; then
         log_info "Circuit source updated; recompiling Part $part..."
+        # If we recompile, old artifacts (zkeys/proofs/witnesses) become invalid.
+        rm -f \
+            "$build_dir/${circuit_name}.zkey" \
+            "$build_dir/${circuit_name}_0.zkey" \
+            "$build_dir/vkey.json" \
+            "$build_dir/proof.json" \
+            "$build_dir/public.json" \
+            "$build_dir/calldata.txt" \
+            "$build_dir/witness.wtns" \
+            "$build_dir/witness.json" \
+            "$build_dir/input.json" \
+            2>/dev/null || true
+
         rm -f "$r1cs_file" "$build_dir/${circuit_name}.sym" "$build_dir/${circuit_name}.wasm" 2>/dev/null || true
         rm -rf "$build_dir/${circuit_name}_js" 2>/dev/null || true
     fi

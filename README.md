@@ -23,6 +23,10 @@ This repository is composed of two parts, [contracts](./contracts/README.md) and
 └── contracts
 ```
 
+## Running with Docker
+
+A Docker image with the full toolchain (Node, circom, snarkjs, Foundry, rapidsnark) is available. See [docker/README.md](./docker/README.md) for build, run, and usage (including PTAU volume and env vars).
+
 ## Protocol
 
 ![](https://ucarecdn.com/875914d5-e930-41c0-a17b-2da59d6c50cc/lightsync.png)
