@@ -1,10 +1,19 @@
 # Running with Docker
 
-The project provides a Docker image with all toolchain dependencies: Node.js 14, circom, snarkjs, rapidsnark, and build tools (GCC, cmake, etc.). Use it to compile circuits without installing dependencies on the host.
+The project provides a Docker image with all toolchain dependencies: Node.js 16, Circom 2.0.8, snarkjs, and build tools (GCC, cmake, etc.). Use it to compile and run circuits without installing dependencies on the host.
+
+## Versions included
+
+- **Node.js**: 16.x (default, for npm/snarkjs and circuit scripts)
+- **Circom**: 2.0.8 (meets requirement >= 2.0.3 from circom-pairing)
+- **snarkjs**: Latest (installed via npm)
+- **Build tools**: GCC, cmake, make, libgmp-dev, libsodium-dev, nasm (for compiling C++ witness generators)
+
+**Note:** Rapidsnark and patched Node are not included. The circuit scripts compile C++ witness generators for heavy parts (Part2, Part3A, Part3B) to avoid WASM memory limits.
 
 ## Building the image
 
-From the repository root:
+From the repository root (build time: ~2 minutes):
 
 ```bash
 docker build -t zkbridge-lightclient .
@@ -15,8 +24,10 @@ docker build -t zkbridge-lightclient .
 The image expects the repository to be mounted at `/workspace`. Optionally mount a directory containing the Powers of Tau (`.ptau`) file so circuit scripts can use it.
 
 ```bash
-docker run --rm -it -v "$(pwd):/workspace" -w /workspace zkbridge-lightclient bash
+docker run --rm -it -v "$(pwd):/workspace" -w /workspace zkbridge-lightclient
 ```
+
+(The container starts with `/bin/sh` by default; you can also explicitly run `sh` or other commands.)
 
 With a volume for the PTAU file (e.g. `~/ptau` contains `pot25_final.ptau`):
 
@@ -26,7 +37,7 @@ docker run --rm -it \
   -v "$HOME/ptau:/ptau:ro" \
   -e PTAU_FILE=/ptau/pot25_final.ptau \
   -w /workspace \
-  zkbridge-lightclient bash
+  zkbridge-lightclient
 ```
 
 Inside the container you can run any command. Examples:
@@ -51,8 +62,7 @@ For full circuit pipeline (trusted setup, proving) you must have a `.ptau` file 
 | Variable            | Description |
 | ------------------- | ----------- |
 | `PTAU_FILE`         | Path to the Powers of Tau file (e.g. `powersOfTau28_hez_final_27.ptau` or `pot25_final.ptau`). Not included in the image; mount a volume and set this. |
-| `NODE_MEM`          | Node.js heap size in MB (default in scripts is 16384). Increase for large circuits (e.g. 65536 for 64GB). |
-| `PATCHED_NODE_PATH` | Optional path to a patched Node binary with larger heap; only needed for very large circuits. |
+| `NODE_MEM`          | Node.js heap size in MB (default 16384 in image env). Increase for large circuits (e.g. 98304 for 96GB with 128GB RAM). |
 
 ## Docker Compose (optional)
 
@@ -77,7 +87,13 @@ services:
 Then:
 
 ```bash
-docker compose run --rm app bash
+docker compose run --rm app
+```
+
+Or for an interactive shell:
+
+```bash
+docker compose run --rm app sh
 ```
 
 ## Notes
@@ -94,4 +110,13 @@ On Ubuntu 22.04/24.04 you can install the toolchain on the host with the optiona
 ./scripts/setup-dev-ubuntu.sh
 ```
 
-Set `INSTALL_RAPIDSNARK=1` to also build and install rapidsnark. Set `INSTALL_FOUNDRY=1` if you need Foundry for contracts (not included in Docker image by default).
+Set `INSTALL_RAPIDSNARK=1` to also build and install rapidsnark (optional; snarkjs is used if not available). Set `INSTALL_FOUNDRY=1` if you need Foundry for contracts (not included in Docker image by default).
+
+## How witness generation works
+
+The circuit compilation (with `--compile-only` or full pipeline) generates both:
+
+1. **WASM witness generator** (`*_js/` folder) - fast but has memory limits (~2-4 GB).
+2. **C++ witness generator** (`*_cpp/` folder + binary) - slower to compile but no memory limit.
+
+The scripts automatically use C++ generators when available (especially for heavy parts like Part 2, Part 3A, Part 3B), avoiding "memory access out of bounds" errors.

@@ -10,6 +10,8 @@
 # - Part 3B uses the ONE circuit variant which computes validity but DOES NOT
 #   constrain it to 1, so the pipeline can complete even if the signature is
 #   invalid (expected for test inputs).
+# - For heavy parts (Part2, Part3A, Part3B), uses C++ witness generator to
+#   avoid WASM memory limits.
 #
 # Usage:
 #   ./run_128_one.sh                    # Full pipeline (default)
@@ -74,6 +76,7 @@ LOG_DIR="$SCRIPT_DIR/logs"
 PTAU_PATHS=(
     "${PTAU_FILE:-}"
     "/home_data/mvillagra/tusima-jose/powers_of_tau/powersOfTau28_hez_final_27.ptau"
+    "/home/tesis/powers_of_tau/powersOfTau28_hez_final_27.ptau"
     "$SCRIPT_DIR/pot25_final.ptau"
     "$SCRIPT_DIR/../utils/circom-pairing/circuits/pot25_final.ptau"
     "$SCRIPT_DIR/../../powers_of_tau/powersOfTau28_hez_final_27.ptau"
@@ -82,7 +85,7 @@ PTAU_PATHS=(
 )
 
 # Node.js configuration (prefers patched node if available)
-NODE_MEM="${NODE_MEM:-16384}"
+NODE_MEM="${NODE_MEM:-98304}"
 
 is_runnable_node() {
     local p="$1"
@@ -299,8 +302,14 @@ compile_part() {
         --r1cs \
         --wasm \
         --sym \
+        --c \
         --output "$build_dir" \
         2>&1 | tee "$LOG_DIR/compile_one_${part}.log"
+
+    if [ -d "$build_dir/${circuit_name}_cpp" ]; then
+        log_info "Building C++ witness generator (avoids WASM memory limit)..."
+        make -C "$build_dir/${circuit_name}_cpp" -j"$(nproc 2>/dev/null || echo 4)" 2>&1 | tee -a "$LOG_DIR/compile_one_${part}.log" || true
+    fi
 
     log_info "Compiled in $(get_elapsed $start)"
     dashboard_complete_part
@@ -336,6 +345,23 @@ compile_all() {
 # k=7 constant for array indexing
 K=7
 
+run_witness_gen() {
+    local build_dir="$1"
+    local circuit_name="$2"
+    local cpp_bin="$build_dir/${circuit_name}_cpp/$circuit_name"
+    
+    if [ -f "$cpp_bin" ] && [ -x "$cpp_bin" ]; then
+        log_info "Using C++ witness generator (avoids WASM memory limit)"
+        "$cpp_bin" "$build_dir/input.json" "$build_dir/witness.wtns"
+    else
+        $NODE_PATH $NODE_OPTS \
+            "$build_dir/${circuit_name}_js/generate_witness.js" \
+            "$build_dir/${circuit_name}_js/${circuit_name}.wasm" \
+            "$build_dir/input.json" \
+            "$build_dir/witness.wtns"
+    fi
+}
+
 generate_witness_part1a() {
     local build_dir="$BUILD_DIR/part1a"
     local circuit_name="${CIRCUIT_PREFIX}_part1a"
@@ -363,11 +389,7 @@ generate_witness_part1a() {
     fs.writeFileSync('$build_dir/input.json', JSON.stringify(input, null, 2));
     "
 
-    $NODE_PATH $NODE_OPTS \
-        "$build_dir/${circuit_name}_js/generate_witness.js" \
-        "$build_dir/${circuit_name}_js/${circuit_name}.wasm" \
-        "$build_dir/input.json" \
-        "$build_dir/witness.wtns"
+    run_witness_gen "$build_dir" "$circuit_name"
 
     snarkjs wtns export json "$build_dir/witness.wtns" "$build_dir/witness.json"
 
@@ -394,11 +416,7 @@ generate_witness_part1b() {
     fs.writeFileSync('$build_dir/input.json', JSON.stringify(input, null, 2));
     "
 
-    $NODE_PATH $NODE_OPTS \
-        "$build_dir/${circuit_name}_js/generate_witness.js" \
-        "$build_dir/${circuit_name}_js/${circuit_name}.wasm" \
-        "$build_dir/input.json" \
-        "$build_dir/witness.wtns"
+    run_witness_gen "$build_dir" "$circuit_name"
 
     snarkjs wtns export json "$build_dir/witness.wtns" "$build_dir/witness.json"
 
@@ -462,11 +480,7 @@ generate_witness_part1c() {
     console.log('Created Part 1C input from Part 1A and 1B outputs');
     "
 
-    $NODE_PATH $NODE_OPTS \
-        "$build_dir_1c/${circuit_name}_js/generate_witness.js" \
-        "$build_dir_1c/${circuit_name}_js/${circuit_name}.wasm" \
-        "$build_dir_1c/input.json" \
-        "$build_dir_1c/witness.wtns"
+    run_witness_gen "$build_dir_1c" "$circuit_name"
 
     snarkjs wtns export json "$build_dir_1c/witness.wtns" "$build_dir_1c/witness.json"
 
@@ -517,11 +531,7 @@ generate_witness_part1d() {
     console.log('Created Part 1D input from Part 1C outputs');
     "
 
-    $NODE_PATH $NODE_OPTS \
-        "$build_dir_1d/${circuit_name}_js/generate_witness.js" \
-        "$build_dir_1d/${circuit_name}_js/${circuit_name}.wasm" \
-        "$build_dir_1d/input.json" \
-        "$build_dir_1d/witness.wtns"
+    run_witness_gen "$build_dir_1d" "$circuit_name"
 
     snarkjs wtns export json "$build_dir_1d/witness.wtns" "$build_dir_1d/witness.json"
 
@@ -613,11 +623,7 @@ generate_witness_part1e() {
     console.log('Created Part 1E input from Part 1C and 1D outputs');
     "
 
-    $NODE_PATH $NODE_OPTS \
-        "$build_dir_1e/${circuit_name}_js/generate_witness.js" \
-        "$build_dir_1e/${circuit_name}_js/${circuit_name}.wasm" \
-        "$build_dir_1e/input.json" \
-        "$build_dir_1e/witness.wtns"
+    run_witness_gen "$build_dir_1e" "$circuit_name"
 
     snarkjs wtns export json "$build_dir_1e/witness.wtns" "$build_dir_1e/witness.json"
 
@@ -680,11 +686,7 @@ generate_witness_part2() {
     console.log('Created Part 2 input from Part 1B and 1E outputs');
     "
 
-    $NODE_PATH $NODE_OPTS \
-        "$build_dir_2/${circuit_name}_js/generate_witness.js" \
-        "$build_dir_2/${circuit_name}_js/${circuit_name}.wasm" \
-        "$build_dir_2/input.json" \
-        "$build_dir_2/witness.wtns"
+    run_witness_gen "$build_dir_2" "$circuit_name"
 
     snarkjs wtns export json "$build_dir_2/witness.wtns" "$build_dir_2/witness.json"
 
@@ -729,11 +731,7 @@ generate_witness_part3a() {
     console.log('Created Part 3A input from Part 2 outputs');
     "
 
-    $NODE_PATH $NODE_OPTS \
-        "$build_dir_3a/${circuit_name}_js/generate_witness.js" \
-        "$build_dir_3a/${circuit_name}_js/${circuit_name}.wasm" \
-        "$build_dir_3a/input.json" \
-        "$build_dir_3a/witness.wtns"
+    run_witness_gen "$build_dir_3a" "$circuit_name"
 
     snarkjs wtns export json "$build_dir_3a/witness.wtns" "$build_dir_3a/witness.json"
 
@@ -778,11 +776,7 @@ generate_witness_part3b() {
     console.log('Created Part 3B input from Part 3A outputs');
     "
 
-    $NODE_PATH $NODE_OPTS \
-        "$build_dir_3b/${circuit_name}_js/generate_witness.js" \
-        "$build_dir_3b/${circuit_name}_js/${circuit_name}.wasm" \
-        "$build_dir_3b/input.json" \
-        "$build_dir_3b/witness.wtns"
+    run_witness_gen "$build_dir_3b" "$circuit_name"
 
     snarkjs wtns export json "$build_dir_3b/witness.wtns" "$build_dir_3b/witness.json"
 
