@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -10,10 +10,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libgmp-dev \
     libsodium-dev \
+    libssl-dev \
     m4 \
     nasm \
     python3 \
     python3-pip \
+    python-is-python3 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_VERSION=16
@@ -25,6 +27,21 @@ RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
 ARG CIRCOM_VERSION=2.0.8
 RUN curl -fsSL "https://github.com/iden3/circom/releases/download/v${CIRCOM_VERSION}/circom-linux-amd64" -o /usr/local/bin/circom \
     && chmod +x /usr/local/bin/circom
+
+COPY docker/node-memory.patch /tmp/node-memory.patch
+RUN git clone https://github.com/nodejs/node.git /tmp/node \
+    && cd /tmp/node \
+    && git checkout 8beef5eeb82425b13d447b50beafb04ece7f91b1 \
+    && patch -p1 < /tmp/node-memory.patch \
+    && ./configure \
+    && make -j"$(nproc)" \
+    && mkdir -p /opt/patched-node/bin \
+    && cp out/Release/node /opt/patched-node/bin/node \
+    && chmod +x /opt/patched-node/bin/node \
+    && cd / \
+    && rm -rf /tmp/node /tmp/node-memory.patch
+
+ENV PATCHED_NODE_PATH=/opt/patched-node/bin/node
 
 RUN useradd -m -s /bin/bash -u 1001 app \
     && mkdir -p /workspace \
