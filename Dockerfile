@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     m4 \
     nasm \
+    nlohmann-json3-dev \
     python3 \
     python3-pip \
     python-is-python3 \
@@ -22,7 +23,7 @@ ENV NODE_VERSION=16
 RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install -g snarkjs
+    && npm install -g snarkjs@0.4.10
 
 ARG CIRCOM_VERSION=2.0.8
 RUN curl -fsSL "https://github.com/iden3/circom/releases/download/v${CIRCOM_VERSION}/circom-linux-amd64" -o /usr/local/bin/circom \

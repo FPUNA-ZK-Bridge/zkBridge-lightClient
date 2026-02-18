@@ -65,6 +65,12 @@ template VerifyHeader128OnePart1B(n, k) {
             aggregated_pubkey[i][j] <== pubkeys[0][i][j];
         }
     }
+
+    // Groth16 requires >= 1 R1CS constraint. With b=1 all constraints above
+    // are linear and --O1 eliminates them entirely. This quadratic constraint
+    // (cross-product of two free-input pubkey limbs) survives optimization.
+    signal _nonlinGuard;
+    _nonlinGuard <== pubkeys[0][0][0] * pubkeys[0][1][0];
 }
 
 // -----------------------------------------------------------------------------

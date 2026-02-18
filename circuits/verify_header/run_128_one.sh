@@ -832,7 +832,7 @@ generate_zkey_part() {
         "$build_dir/${circuit_name}_0.zkey" \
         "$build_dir/${circuit_name}.zkey" \
         -n="128-one contribution" \
-        -e="$(date +%s)$(head -c 32 /dev/urandom | xxd -p)"
+        -e="$(date +%s)$(head -c 32 /dev/urandom | od -A n -t x1 | tr -d ' \n')"
 
     rm -f "$build_dir/${circuit_name}_0.zkey"
 

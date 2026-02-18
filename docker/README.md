@@ -4,9 +4,9 @@ The project provides a Docker image with all toolchain dependencies: Node.js 16,
 
 ## Versions included
 
-- **Node.js**: 16.x (default, for npm/snarkjs and circuit scripts)
+- **Node.js**: 16.x (default, for npm and circuit scripts)
 - **Circom**: 2.0.8 (meets requirement >= 2.0.3 from circom-pairing)
-- **snarkjs**: Latest (installed via npm)
+- **snarkjs**: 0.4.10 (global install in image)
 - **Build tools**: GCC, cmake, make, libgmp-dev, libsodium-dev, nasm (for compiling C++ witness generators)
 
 **Note:** Rapidsnark and patched Node are not included. The circuit scripts compile C++ witness generators for heavy parts (Part2, Part3A, Part3B) to avoid WASM memory limits.
